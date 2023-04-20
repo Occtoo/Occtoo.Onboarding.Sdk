@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 
-namespace Occtoo.Onboarding.Sdk
+namespace Occtoo.Onboarding.Sdk.Models
 {
     public class MediaFileDto
     {

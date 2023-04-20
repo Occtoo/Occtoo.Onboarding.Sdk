@@ -1,6 +1,6 @@
 ﻿using System.Collections.Generic;
 
-namespace Occtoo.Onboarding.Sdk
+namespace Occtoo.Onboarding.Sdk.Models
 {
     public class DynamicEntity
     {
@@ -10,7 +10,7 @@ namespace Occtoo.Onboarding.Sdk
 
         public List<DynamicProperty> Properties { get; set; } = new List<DynamicProperty>();
 
-        public override string ToString() => string.IsNullOrEmpty(this.Key) ? base.ToString() : this.Key;
+        public override string ToString() => string.IsNullOrEmpty(Key) ? base.ToString() : Key;
     }
 
     public class DynamicProperty
@@ -21,6 +21,6 @@ namespace Occtoo.Onboarding.Sdk
 
         public string Language { get; set; }
 
-        public override string ToString() => string.IsNullOrEmpty(this.Id) ? base.ToString() : this.Id;
+        public override string ToString() => string.IsNullOrEmpty(Id) ? base.ToString() : Id;
     }
 }
