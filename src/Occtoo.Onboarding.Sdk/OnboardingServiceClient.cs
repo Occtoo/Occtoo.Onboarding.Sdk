@@ -19,6 +19,7 @@ namespace Occtoo.Onboarding.Sdk
         Task<StartImportResponse> StartEntityImportAsync(string dataSource, IReadOnlyList<DynamicEntity> entities, string token, Guid? correlationId = null, CancellationToken? cancellationToken = null);
         StartImportResponse StartEntityImport(string dataSource, IReadOnlyList<DynamicEntity> entities, string token, Guid? correlationId = null, CancellationToken? cancellationToken = null);
         Task<string> GetTokenAsync(CancellationToken? cancellationToken = null);
+        Task<ApiResult<MediaFileDto>> GetFileAsync(string id, CancellationToken? cancellationToken = null);
     }
 
     public class OnboardingServiceClient : IOnboardingServiceClient, IDisposable
@@ -87,6 +88,23 @@ namespace Occtoo.Onboarding.Sdk
             var tokenResponseContent = await tokenResponse.Content.ReadAsStringAsync();
             var tokenDocument = JsonConvert.DeserializeObject<TokenResponse>(tokenResponseContent);
             return tokenDocument.result.accessToken;
+        }
+
+        public async Task<ApiResult<MediaFileDto>> GetFileAsync(string id, CancellationToken? cancellationToken = null)
+        {
+            CancellationToken valueOrDefaultCancelToken = cancellationToken.GetValueOrDefault();
+            var token = await GetTokenThroughCache(valueOrDefaultCancelToken);
+            var message = new HttpRequestMessage(HttpMethod.Get, $"media/files/{id}")
+            {
+                Headers =
+                {
+                    { "Authorization", $"Bearer {token}" }
+                }
+            };
+            var response = await httpClient.SendAsync(message);
+            var apiResult = JsonConvert.DeserializeObject<ApiResult<MediaFileDto>>(await response.Content.ReadAsStringAsync());
+            apiResult.StatusCode = (int)response.StatusCode;
+            return apiResult;
         }
 
         private static async Task<StartImportResponse> EntityImportAsync(string dataSource, IEnumerable<DynamicEntity> validEntities, string token, CancellationToken cancellationToken, Guid? correlationId = null)

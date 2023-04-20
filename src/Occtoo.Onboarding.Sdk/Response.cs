@@ -40,4 +40,23 @@ namespace Occtoo.Onboarding.Sdk
         public object refreshToken { get; set; }
         public string scope { get; set; }
     }
+
+    public class ApiResult<T>
+    {
+        public T Result { get; set; }
+        public Error[] Errors { get; set; }
+        public string RequestId { get; set; }
+        public int StatusCode { get; set; }
+    }
+    public class ApiResult
+    {
+        public Error[] Errors { get; set; }
+        public string RequestId { get; set; }
+        public int StatusCode { get; set; }
+    }
+
+    public class Error
+    {
+        public string Message { get; set; }
+    }
 }
