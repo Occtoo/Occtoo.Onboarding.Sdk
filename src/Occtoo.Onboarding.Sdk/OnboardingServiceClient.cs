@@ -23,10 +23,9 @@ namespace Occtoo.Onboarding.Sdk
 
     public class OnboardingServiceClient : IOnboardingServiceClient, IDisposable
     {
-        private static readonly HttpClient HttpClient = new HttpClient()
+        private static readonly HttpClient httpClient = new HttpClient()
         {
-            BaseAddress = new Uri("https://ingest.occtoo.com"),
-            DefaultRequestHeaders = { { "ContentType", "application/json" } }
+            BaseAddress = new Uri("https://ingest.occtoo.com")
         };
         private readonly string cachekey = "token";
         private readonly string dataProviderId;
@@ -79,7 +78,7 @@ namespace Occtoo.Onboarding.Sdk
                     secret = dataProviderSecret
                 }), Encoding.UTF8, "application/json")
             };
-            var tokenResponse = await HttpClient.SendAsync(tokenRequest, valueOrDefaultCancelToken);
+            var tokenResponse = await httpClient.SendAsync(tokenRequest, valueOrDefaultCancelToken);
             if (!tokenResponse.IsSuccessStatusCode)
             {
                 throw new ArgumentException("Couldn't obtain a token please check your dataprovider details");
@@ -104,7 +103,7 @@ namespace Occtoo.Onboarding.Sdk
             {
                 Entities = validEntities
             }), Encoding.UTF8, "application/json");
-            var ingestResponse = await HttpClient.SendAsync(ingestRequest, cancellationToken);
+            var ingestResponse = await httpClient.SendAsync(ingestRequest, cancellationToken);
             if (!ingestResponse.IsSuccessStatusCode)
             {
                 switch (ingestResponse.StatusCode)
@@ -194,6 +193,6 @@ namespace Occtoo.Onboarding.Sdk
             return validEntitites;
         }
 
-        public void Dispose() => HttpClient?.Dispose();
+        public void Dispose() => httpClient?.Dispose();
     }
 }
