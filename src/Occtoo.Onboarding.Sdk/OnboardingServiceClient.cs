@@ -134,13 +134,7 @@ namespace Occtoo.Onboarding.Sdk
             }
 
             token = await GetTokenAsync(cancellationToken);
-
-            // Store data in the cache    
-            var cacheItem = cache.CreateEntry(cachekey);
-            cacheItem.Value = token;
-            cacheItem.AbsoluteExpiration = DateTime.Now.AddMinutes(59);
-            cache.Set(cachekey, token);
-
+            cache.Set(cachekey, token, DateTime.UtcNow.AddMinutes(59)); // Store data in the cache for 59 minutes from now
             return token;
         }
 
