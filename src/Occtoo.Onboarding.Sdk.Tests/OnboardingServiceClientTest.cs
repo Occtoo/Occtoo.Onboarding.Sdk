@@ -245,13 +245,19 @@ namespace Occtoo.Onboarding.Sdk.Tests
         {
             var request = new UploadLinksRequest(new List<FileUploadFromLink>
                 {
-                    new FileUploadFromLink("https://media.occtoo.com/53fa5a53-821b-446a-91cd-bf6e39a9c5e9/427e1546-e11d-54d5-84f7-e7a2d8a2d86e/310048005_a_keb_lite_trousers_fjaellraeven_1.jpg", "310048005_a_keb_lite_trousers_fjaellraeven_1.jpg"),
-                    new FileUploadFromLink("https://media.occtoo.com/53fa5a53-821b-446a-91cd-bf6e39a9c5e9/0009bf6d-9b44-5e91-8884-d739a2960d91/360_285482002_ay_anjan_3_gt_hilleberg.jpg", "360_285482002_ay_anjan_3_gt_hilleberg.jpg")
+                   new FileUploadFromLink("https://media.occtoo.com/53fa5a53-821b-446a-91cd-bf6e39a9c5e9/427e1546-e11d-54d5-84f7-e7a2d8a2d86e/310048005_a_keb_lite_trousers_fjaellraeven_1.jpg", "310048005_a_keb_lite_trousers_fjaellraeven_1.jpg")
+                   {
+                       UniqueIdentifier = "file1"
+                   },
+                   new FileUploadFromLink("https://media.occtoo.com/53fa5a53-821b-446a-91cd-bf6e39a9c5e9/0009bf6d-9b44-5e91-8884-d739a2960d91/360_285482002_ay_anjan_3_gt_hilleberg.jpg", "360_285482002_ay_anjan_3_gt_hilleberg.jpg")
+                   {
+                        UniqueIdentifier = "file2"
+                   }
                 }
             );
             var onboardingServliceClient = new OnboardingServiceClient(dataProviderId, dataProviderSecret);
             var response = await onboardingServliceClient.UploadFromLinksAsync(request);
-            Assert.Equal(2, response.Result.Succeeded.Count);
+            Assert.False(response.Errors.Any());
         }
 
         [Fact]
@@ -260,6 +266,17 @@ namespace Occtoo.Onboarding.Sdk.Tests
             var onboardingServliceClient = new OnboardingServiceClient(dataProviderId, dataProviderSecret);
             var response = await onboardingServliceClient.GetFileAsync("5f639717-c581-4924-82e0-434b006fe149");
             Console.WriteLine(response.Result.PublicUrl);
+            Assert.Equal(200, response.StatusCode);
+        }
+
+        [Fact]
+        public async Task GetImages()
+        {
+            var onboardingServliceClient = new OnboardingServiceClient(dataProviderId, dataProviderSecret);
+            var response = await onboardingServliceClient.GetFilesBatchAsync(new GetMediaByUniqueIdentifiers {
+                UniqueIdentifiers = new List<string> { "file1", "file2" }
+            });
+            Console.WriteLine(response.RequestId);
             Assert.Equal(200, response.StatusCode);
         }
     }
