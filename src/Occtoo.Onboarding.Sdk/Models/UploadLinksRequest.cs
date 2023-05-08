@@ -13,10 +13,11 @@ namespace Occtoo.Onboarding.Sdk.Models
 
     public class FileUploadFromLink
     {
-        public FileUploadFromLink(string link, string filename)
+        public FileUploadFromLink(string link, string filename, string uniqueIdentifier = null)
         {
             Link = link;
             Filename = filename;
+            UniqueIdentifier = uniqueIdentifier;
         }
         public string Link { get; set; }
         public string Filename { get; set; }
