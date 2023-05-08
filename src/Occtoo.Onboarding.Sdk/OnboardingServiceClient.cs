@@ -33,8 +33,6 @@ namespace Occtoo.Onboarding.Sdk
 
     public class OnboardingServiceClient : IOnboardingServiceClient, IDisposable
     {
-        private static readonly HttpClient mediaClient = new HttpClient()
-        { BaseAddress = new Uri("https://occtoo-media-api-prod.azurewebsites.net") };
         private static readonly HttpClient httpClient = new HttpClient()
         {
             BaseAddress = new Uri("https://ingest.occtoo.com")
@@ -114,14 +112,14 @@ namespace Occtoo.Onboarding.Sdk
         {
             CancellationToken valueOrDefaultCancelToken = cancellationToken.GetValueOrDefault();
             var token = await GetTokenThroughCache(valueOrDefaultCancelToken);
-            var message = new HttpRequestMessage(HttpMethod.Get, $"files/{id}")
+            var message = new HttpRequestMessage(HttpMethod.Get, $"media/files/{id}")
             {
                 Headers =
                 {
                     { "Authorization", $"Bearer {token}" }
                 }
             };
-            var response = await mediaClient.SendAsync(message);
+            var response = await httpClient.SendAsync(message);
             var apiResult = JsonConvert.DeserializeObject<ApiResult<MediaFileDto>>(await response.Content.ReadAsStringAsync());
             apiResult.StatusCode = (int)response.StatusCode;
             return apiResult;
@@ -136,7 +134,7 @@ namespace Occtoo.Onboarding.Sdk
         {
             CancellationToken valueOrDefaultCancelToken = cancellationToken.GetValueOrDefault();
             var token = await GetTokenThroughCache(valueOrDefaultCancelToken);
-            var message = new HttpRequestMessage(HttpMethod.Put, "uploads/links")
+            var message = new HttpRequestMessage(HttpMethod.Put, "media/uploads/links")
             {
                 Headers =
                 {
@@ -144,7 +142,7 @@ namespace Occtoo.Onboarding.Sdk
                 },
                 Content = new StringContent(JsonConvert.SerializeObject(request), Encoding.UTF8, "application/json")
             };
-            var response = await mediaClient.SendAsync(message);
+            var response = await httpClient.SendAsync(message);
             var apiResult = JsonConvert.DeserializeObject<ApiResult<PartialSuccessResponse<string, UploadDto, UploadCreateError>>>(await response.Content.ReadAsStringAsync());
             apiResult.StatusCode = (int)response.StatusCode;
             return apiResult;
