@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.Caching.Memory;
+﻿using CSharpFunctionalExtensions;
+using Microsoft.Extensions.Caching.Memory;
 using Newtonsoft.Json;
 using Occtoo.Onboarding.Sdk.Models;
 using System;
@@ -24,6 +25,7 @@ namespace Occtoo.Onboarding.Sdk
         Task<ApiResult<PartialSuccessResponse<string, MediaFileDto, Error>>> GetFilesBatchAsync(GetMediaByUniqueIdentifiers identifiers, CancellationToken? cancellationToken = null);
         Task<ApiResult<PartialSuccessResponse<string, UploadDto, UploadCreateError>>> UploadFromLinksAsync(UploadLinksRequest request, CancellationToken? cancellationToken = null);
         Task<ApiResult<UploadDto>> GetUploadStatusAsync(string uploadId, CancellationToken? cancellationToken = null);
+        Task<ApiResult> DeleteFileAsync(string fileId, CancellationToken? cancellationToken = null);
 
         //Synchronous
         StartImportResponse StartEntityImport(string dataSource, IReadOnlyList<DynamicEntity> entities, Guid? correlationId = null, CancellationToken? cancellationToken = null);
@@ -33,6 +35,7 @@ namespace Occtoo.Onboarding.Sdk
         ApiResult<PartialSuccessResponse<string, MediaFileDto, Error>> GetFilesBatch(GetMediaByUniqueIdentifiers identifiers, CancellationToken? cancellationToken = null);
         ApiResult<PartialSuccessResponse<string, UploadDto, UploadCreateError>> UploadFromLinks(UploadLinksRequest request, CancellationToken? cancellationToken = null);
         ApiResult<UploadDto> GetUploadStatus(string uploadId, CancellationToken? cancellationToken = null);
+        ApiResult DeleteFile(string fileId, CancellationToken? cancellationToken = null);
     }
 
     public class OnboardingServiceClient : IOnboardingServiceClient, IDisposable
@@ -209,6 +212,38 @@ namespace Occtoo.Onboarding.Sdk
             var apiResult = JsonConvert.DeserializeObject<ApiResult<UploadDto>>(await response.Content.ReadAsStringAsync());
             apiResult.StatusCode = (int)response.StatusCode;
             return apiResult;
+        }
+
+        public ApiResult DeleteFile(string fileId, CancellationToken? cancellationToken = null)
+        {
+            return DeleteFileAsync(fileId, cancellationToken).GetAwaiter().GetResult();
+        }
+
+        public async Task<ApiResult> DeleteFileAsync(string fileId, CancellationToken? cancellationToken = null)
+        {
+            CancellationToken valueOrDefaultCancelToken = cancellationToken.GetValueOrDefault();
+            var token = await GetTokenThroughCache(valueOrDefaultCancelToken);
+            var message = new HttpRequestMessage(HttpMethod.Delete, $"media/files/{fileId}")
+            {
+                Headers =
+                {
+                    { "Authorization", $"Bearer {token}" }
+                }
+            };
+            var response = await httpClient.SendAsync(message);
+            if (response.IsSuccessStatusCode)
+            {
+                return new ApiResult
+                {
+                    StatusCode = (int)response.StatusCode
+                };
+            }
+            else
+            {
+                var apiResult = JsonConvert.DeserializeObject<ApiResult>(await response.Content.ReadAsStringAsync());
+                apiResult.StatusCode = (int)response.StatusCode;
+                return apiResult;
+            }
         }
 
         private static async Task<StartImportResponse> EntityImportAsync(string dataSource, IEnumerable<DynamicEntity> validEntities, string token, CancellationToken cancellationToken, Guid? correlationId = null)

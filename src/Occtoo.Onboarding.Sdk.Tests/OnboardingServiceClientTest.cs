@@ -276,8 +276,29 @@ namespace Occtoo.Onboarding.Sdk.Tests
             var response = await onboardingServliceClient.GetFilesBatchAsync(new GetMediaByUniqueIdentifiers {
                 UniqueIdentifiers = new List<string> { "occtooLogoDark", "petter" }
             });
-            Console.WriteLine(response.RequestId);
             Assert.Equal(200, response.StatusCode);
+        }
+
+        [Fact]
+        public async Task DeleteImage()
+        {
+            var onboardingServliceClient = new OnboardingServiceClient(dataProviderId, dataProviderSecret);
+            var getResponse = await onboardingServliceClient.GetFilesBatchAsync(new GetMediaByUniqueIdentifiers
+            {
+                UniqueIdentifiers = new List<string> { "petter" }
+            });
+            var fileIdToDelete = getResponse.Result.Succeeded.First().Value.Id;
+            var deleteResponse = await onboardingServliceClient.DeleteFileAsync(fileIdToDelete);
+            Assert.Equal(204, deleteResponse.StatusCode);
+        }
+
+        [Fact]
+        public async Task TryingToDeleteImageThatDoesnotExist()
+        {
+            var onboardingServliceClient = new OnboardingServiceClient(dataProviderId, dataProviderSecret);
+            var fileIdToDelete = "foo";
+            var deleteResponse = await onboardingServliceClient.DeleteFileAsync(fileIdToDelete);
+            Assert.Equal(404, deleteResponse.StatusCode);
         }
     }
 }
