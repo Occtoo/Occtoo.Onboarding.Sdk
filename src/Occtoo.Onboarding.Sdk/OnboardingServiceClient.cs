@@ -9,6 +9,7 @@ using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Reactive.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -247,6 +248,49 @@ namespace Occtoo.Onboarding.Sdk
             }
         }
 
+        public async Task<ApiResult<MediaFileDto>> UploadFileAsync(Stream content, UploadMetadata metadata, CancellationToken? cancellationToken = null)
+        {
+            CancellationToken valueOrDefaultCancelToken = cancellationToken.GetValueOrDefault();
+            var fileResponse = await CreateFileAsync((int)metadata.Size, UploadMetadata.Serialize(metadata).Value, cancellationToken);
+            if (!fileResponse.IsSuccessStatusCode)
+            {
+                return new ApiResult<MediaFileDto>
+                {
+                    Errors = new Error[1] { new Error(await fileResponse.Content.ReadAsStringAsync()) },
+                    StatusCode = 409
+                };
+            }
+
+            var fileId = GetFileId(fileResponse);
+            if (fileId.IsFailure)
+            {
+                return new ApiResult<MediaFileDto>
+                {
+                    Errors = new Error[1] { fileId.Error },
+                    StatusCode = 500
+                };
+            }
+
+            var uploadResponse = await CreateObservableUpload(fileId.Value, content, 0L, valueOrDefaultCancelToken).LastOrDefaultAsync();
+            if (!uploadResponse.IsCompleted)
+            {
+                return new ApiResult<MediaFileDto>
+                {
+                    Errors = new Error[1] { new Error($"Could only complete {uploadResponse.CompletedPercentage} percentage of the file.") },
+                    StatusCode = 500
+                };
+            }
+
+            return await GetFileAsync(fileId.Value, valueOrDefaultCancelToken);
+        }
+
+        private static async Task<ApiResult<T>> GetApiResultFromResponse<T>(HttpResponseMessage response)
+        {
+            var apiResult = JsonConvert.DeserializeObject<ApiResult<T>>(await response.Content.ReadAsStringAsync());
+            apiResult.StatusCode = (int)response.StatusCode;
+            return apiResult;
+        }
+
         private static async Task<StartImportResponse> EntityImportAsync(string dataSource, IEnumerable<DynamicEntity> validEntities, string token, CancellationToken cancellationToken, Guid? correlationId = null)
         {
             string requestUri = $"import/{dataSource}";
@@ -346,8 +390,22 @@ namespace Occtoo.Onboarding.Sdk
         }
 
         #region TUS, open protocol for resumable file uploads https://tus.io/
-
-        public async Task<HttpResponseMessage> CreateFileAsync(int contentLength, string metadata, CancellationToken? cancellationToken = null)
+        /// <summary>
+        /// An empty POST request is used to create a new upload resource. 
+        /// The Upload-Length header indicates the size of the entire upload in bytes.
+        /// </summary>
+        /// <param name="contentLength">Length of the upload in bytes</param>
+        /// <param name="metadata">
+        /// The Upload-Metadata requestand response header MUST consist of one or more comma-separated key-valuepairs. 
+        /// The key and value MUST be separated by a space. The key MUST NOTcontain spaces and commas and MUST NOT be empty. 
+        /// The key SHOULD be ASCIIencoded and the value MUST be Base64 encoded. All keys MUST be unique. Thevalue MAY be empty. 
+        /// In these cases, the space, which would normally separatethe key and the value, MAY be left out. Since metadata can 
+        /// contain arbitrarybinary values, Servers SHOULD carefully validate metadata values or sanitizethem before using them 
+        /// as header values to avoid header smuggling.
+        /// </param>
+        /// <param name="cancellationToken">Own cancellation token can be provided</param>
+        /// <returns></returns>
+        private async Task<HttpResponseMessage> CreateFileAsync(int contentLength, string metadata, CancellationToken? cancellationToken = null)
         {
             CancellationToken valueOrDefaultCancelToken = cancellationToken.GetValueOrDefault();
             var token = await GetTokenThroughCache(valueOrDefaultCancelToken);
@@ -365,7 +423,17 @@ namespace Occtoo.Onboarding.Sdk
             return await httpClient.SendAsync(message, valueOrDefaultCancelToken);
         }
 
-        public async Task<HttpResponseMessage> PatchFileAsync(string fileId, int bufferLength, long currentOffset, MemoryStream memoryStream, CancellationToken? cancellationToken = null)
+        /// <summary>
+        /// All PATCH requests MUST use Content-Type: application/offset+octet-stream, 
+        /// otherwise the server SHOULD return a 415 Unsupported Media Type status.'
+        /// </summary>
+        /// <param name="fileId">Id of the file</param>
+        /// <param name="bufferLength">Length of the buffer</param>
+        /// <param name="currentOffset">Current offset</param>
+        /// <param name="memoryStream">The stream to patch with</param>
+        /// <param name="cancellationToken">Own cancellation token can be provided</param>
+        /// <returns></returns>
+        private async Task<HttpResponseMessage> PatchFileAsync(string fileId, int bufferLength, long currentOffset, MemoryStream memoryStream, CancellationToken? cancellationToken = null)
         {
             CancellationToken valueOrDefaultCancelToken = cancellationToken.GetValueOrDefault();
             var token = await GetTokenThroughCache(valueOrDefaultCancelToken);
@@ -385,7 +453,7 @@ namespace Occtoo.Onboarding.Sdk
             return await httpClient.SendAsync(message, valueOrDefaultCancelToken);
         }
 
-        public async Task<Result<long, Error>> GetCurrentOffset(string fileId, CancellationToken? cancellationToken = null)
+        private async Task<Result<long, Error>> GetCurrentOffset(string fileId, CancellationToken? cancellationToken = null)
         {
             var response = await GetOffset(fileId, cancellationToken);
             if (response.StatusCode == HttpStatusCode.NotFound)
@@ -394,8 +462,6 @@ namespace Occtoo.Onboarding.Sdk
                 return 0;
             return Int64.Parse(offset.Single());
         }
-
-
 
         private async Task<HttpResponseMessage> GetOffset(string fileId, CancellationToken? cancellationToken = null)
         {
@@ -410,6 +476,38 @@ namespace Occtoo.Onboarding.Sdk
                 }
             };
             return await httpClient.SendAsync(message, valueOrDefaultCancelToken);
+        }
+
+        private IObservable<Progress> CreateObservableUpload(string fileId, Stream content, long offset, CancellationToken cancellationToken)
+        {
+            int chunkSize = 4194304; // 4mb
+            long currentOffset = offset;
+            var observable = Observable.Create<Progress>(async observer =>
+            {
+                while (currentOffset < content.Length)
+                {
+                    var buffer = new byte[Math.Min(chunkSize, content.Length - currentOffset)];
+                    var bytesRead = await content.ReadAsync(buffer, 0, buffer.Length, cancellationToken);
+                    HttpResponseMessage patchResponse = await PatchFileAsync(
+                        fileId,
+                        buffer.Length,
+                        currentOffset,
+                        new MemoryStream(buffer));
+                    currentOffset = Int32.Parse(patchResponse.Headers.GetValues("Upload-Offset").First());
+                    observer.OnNext(new Progress(content.Length, currentOffset, (currentOffset / content.Length) * 100,
+                        content.Length == currentOffset));
+                }
+
+                observer.OnCompleted();
+            });
+            return observable;
+        }
+
+        private static Result<string, Error> GetFileId(HttpResponseMessage response)
+        {
+            if (response.Headers.TryGetValues("Location", out var location))
+                return location.First().Split('/').Last();
+            return Result.Failure<string, Error>(new Error("Upload failed. File creation response does not contain file location in header"));
         }
         #endregion
 

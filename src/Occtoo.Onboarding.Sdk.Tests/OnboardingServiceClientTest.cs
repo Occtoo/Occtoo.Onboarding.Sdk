@@ -1,4 +1,3 @@
-using CSharpFunctionalExtensions;
 using Microsoft.Extensions.Configuration;
 using Occtoo.Onboarding.Sdk.Models;
 
@@ -9,6 +8,7 @@ namespace Occtoo.Onboarding.Sdk.Tests
         private readonly string dataProviderId;
         private readonly string dataProviderSecret;
         private readonly string dataSource = "nugetTester";
+        private static Random random = new Random();
 
         public OnboardingServiceClientTest()
         {
@@ -273,7 +273,8 @@ namespace Occtoo.Onboarding.Sdk.Tests
         public async Task GetImages()
         {
             var onboardingServliceClient = new OnboardingServiceClient(dataProviderId, dataProviderSecret);
-            var response = await onboardingServliceClient.GetFilesBatchAsync(new GetMediaByUniqueIdentifiers {
+            var response = await onboardingServliceClient.GetFilesBatchAsync(new GetMediaByUniqueIdentifiers
+            {
                 UniqueIdentifiers = new List<string> { "occtooLogoDark", "petter" }
             });
             Assert.Equal(200, response.StatusCode);
@@ -299,6 +300,37 @@ namespace Occtoo.Onboarding.Sdk.Tests
             var fileIdToDelete = "foo";
             var deleteResponse = await onboardingServliceClient.DeleteFileAsync(fileIdToDelete);
             Assert.Equal(404, deleteResponse.StatusCode);
+        }
+
+
+        [Fact]
+        public async Task UploadFileFromStream()
+        {
+            var onboardingServliceClient = new OnboardingServiceClient(dataProviderId, dataProviderSecret);
+            var httpClient = new HttpClient();
+            var fileByteArray = await httpClient.GetByteArrayAsync("https://www.occtoo.com/hs-fs/hubfs/Petter.jpg?width=200&height=200&name=Petter.jpg");
+            var metadata = new UploadMetadata("petter", "image/jpeg", fileByteArray.Length, RandomString(4));
+            var response = await onboardingServliceClient.UploadFileAsync(new MemoryStream(fileByteArray), metadata);
+            Console.WriteLine(response.Result.PublicUrl);
+            Assert.Equal(200, response.StatusCode);
+        }
+
+        [Fact]
+        public async Task UploadFileFromStreamShouldGiveAlreadyExistError()
+        {
+            var onboardingServliceClient = new OnboardingServiceClient(dataProviderId, dataProviderSecret);
+            var httpClient = new HttpClient();
+            var fileByteArray = await httpClient.GetByteArrayAsync("https://www.occtoo.com/hs-fs/hubfs/Petter.jpg?width=200&height=200&name=Petter.jpg");
+            var metadata = new UploadMetadata("petter", "image/jpeg", fileByteArray.Length, "petterFromStream");
+            var response = await onboardingServliceClient.UploadFileAsync(new MemoryStream(fileByteArray), metadata);
+            Assert.Equal(409, response.StatusCode);
+        }
+
+        private static string RandomString(int length)
+        {
+            const string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+            return new string(Enumerable.Repeat(chars, length)
+                .Select(s => s[random.Next(s.Length)]).ToArray());
         }
     }
 }
