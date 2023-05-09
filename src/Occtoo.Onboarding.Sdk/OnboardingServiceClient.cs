@@ -86,7 +86,7 @@ namespace Occtoo.Onboarding.Sdk
         }
 
         public string GetToken(CancellationToken? cancellationToken = null)
-        { 
+        {
             return GetTokenAsync(cancellationToken).GetAwaiter().GetResult();
         }
         public async Task<string> GetTokenAsync(CancellationToken? cancellationToken = null)
@@ -128,9 +128,7 @@ namespace Occtoo.Onboarding.Sdk
                 }
             };
             var response = await httpClient.SendAsync(message, valueOrDefaultCancelToken);
-            var apiResult = JsonConvert.DeserializeObject<ApiResult<MediaFileDto>>(await response.Content.ReadAsStringAsync());
-            apiResult.StatusCode = (int)response.StatusCode;
-            return apiResult;
+            return await GetApiResultFromResponse<MediaFileDto>(response);
         }
 
         public ApiResult<PartialSuccessResponse<string, MediaFileDto, Error>> GetFilesBatch(GetMediaByUniqueIdentifiers uniqueIdentifiers, CancellationToken? cancellationToken = null)
@@ -151,9 +149,7 @@ namespace Occtoo.Onboarding.Sdk
                 Content = new StringContent(JsonConvert.SerializeObject(uniqueIdentifiers), Encoding.UTF8, "application/json")
             };
             var response = await httpClient.SendAsync(message, valueOrDefaultCancelToken);
-            var apiResult = JsonConvert.DeserializeObject<ApiResult<PartialSuccessResponse<string, MediaFileDto, Error>>>(await response.Content.ReadAsStringAsync());
-            apiResult.StatusCode = (int)response.StatusCode;
-            return apiResult;
+            return await GetApiResultFromResponse<PartialSuccessResponse<string, MediaFileDto, Error>>(response); ;
         }
 
         public ApiResult<PartialSuccessResponse<string, UploadDto, UploadCreateError>> UploadFromLinks(UploadLinksRequest request, CancellationToken? cancellationToken = null)
@@ -183,9 +179,7 @@ namespace Occtoo.Onboarding.Sdk
                 Content = new StringContent(JsonConvert.SerializeObject(request), Encoding.UTF8, "application/json")
             };
             var response = await httpClient.SendAsync(message, valueOrDefaultCancelToken);
-            var apiResult = JsonConvert.DeserializeObject<ApiResult<PartialSuccessResponse<string, UploadDto, UploadCreateError>>>(await response.Content.ReadAsStringAsync());
-            apiResult.StatusCode = (int)response.StatusCode;
-            return apiResult;
+            return await GetApiResultFromResponse<PartialSuccessResponse<string, UploadDto, UploadCreateError>>(response);
         }
 
         public ApiResult<UploadDto> GetUploadStatus(string uploadId, CancellationToken? cancellationToken = null)
@@ -211,9 +205,7 @@ namespace Occtoo.Onboarding.Sdk
                 }
             };
             var response = await httpClient.SendAsync(message, valueOrDefaultCancelToken);
-            var apiResult = JsonConvert.DeserializeObject<ApiResult<UploadDto>>(await response.Content.ReadAsStringAsync());
-            apiResult.StatusCode = (int)response.StatusCode;
-            return apiResult;
+            return await GetApiResultFromResponse<UploadDto>(response);
         }
 
         public ApiResult DeleteFile(string fileId, CancellationToken? cancellationToken = null)

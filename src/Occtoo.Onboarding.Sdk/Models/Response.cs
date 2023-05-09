@@ -1,9 +1,9 @@
-﻿using System;
+﻿using CSharpFunctionalExtensions;
+using Newtonsoft.Json;
+using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
-using CSharpFunctionalExtensions;
-using Newtonsoft.Json;
 
 namespace Occtoo.Onboarding.Sdk.Models
 {
@@ -69,7 +69,7 @@ namespace Occtoo.Onboarding.Sdk.Models
     {
         public string Error { get; set; }
     }
-    
+
     public class UploadDto
     {
         public string Id { get; set; }
