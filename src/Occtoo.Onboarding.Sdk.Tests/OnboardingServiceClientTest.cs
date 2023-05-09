@@ -261,10 +261,19 @@ namespace Occtoo.Onboarding.Sdk.Tests
         }
 
         [Fact]
-        public async Task GetImage()
+        public async Task GetImageById()
         {
             var onboardingServliceClient = new OnboardingServiceClient(dataProviderId, dataProviderSecret);
             var response = await onboardingServliceClient.GetFileAsync("5f639717-c581-4924-82e0-434b006fe149");
+            Console.WriteLine(response.Result.PublicUrl);
+            Assert.Equal(200, response.StatusCode);
+        }
+
+        [Fact]
+        public async Task GetImageByUniqueId()
+        {
+            var onboardingServliceClient = new OnboardingServiceClient(dataProviderId, dataProviderSecret);
+            var response = await onboardingServliceClient.GetFileFromUniqueIdAsync("petter");
             Console.WriteLine(response.Result.PublicUrl);
             Assert.Equal(200, response.StatusCode);
         }

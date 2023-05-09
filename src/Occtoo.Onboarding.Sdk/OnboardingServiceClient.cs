@@ -22,7 +22,8 @@ namespace Occtoo.Onboarding.Sdk
         Task<StartImportResponse> StartEntityImportAsync(string dataSource, IReadOnlyList<DynamicEntity> entities, Guid? correlationId = null, CancellationToken? cancellationToken = null);
         Task<StartImportResponse> StartEntityImportAsync(string dataSource, IReadOnlyList<DynamicEntity> entities, string token, Guid? correlationId = null, CancellationToken? cancellationToken = null);
         Task<string> GetTokenAsync(CancellationToken? cancellationToken = null);
-        Task<ApiResult<MediaFileDto>> GetFileAsync(string id, CancellationToken? cancellationToken = null);
+        Task<ApiResult<MediaFileDto>> GetFileAsync(string fileId, CancellationToken? cancellationToken = null);
+        Task<ApiResult<MediaFileDto>> GetFileFromUniqueIdAsync(string UniqueIdentifier, CancellationToken? cancellationToken = null);
         Task<ApiResult<PartialSuccessResponse<string, MediaFileDto, Error>>> GetFilesBatchAsync(GetMediaByUniqueIdentifiers identifiers, CancellationToken? cancellationToken = null);
         Task<ApiResult<PartialSuccessResponse<string, UploadDto, UploadCreateError>>> UploadFromLinksAsync(UploadLinksRequest request, CancellationToken? cancellationToken = null);
         Task<ApiResult<MediaFileDto>> UploadFileAsync(Stream content, UploadMetadata metadata, CancellationToken? cancellationToken = null);
@@ -33,7 +34,8 @@ namespace Occtoo.Onboarding.Sdk
         StartImportResponse StartEntityImport(string dataSource, IReadOnlyList<DynamicEntity> entities, Guid? correlationId = null, CancellationToken? cancellationToken = null);
         StartImportResponse StartEntityImport(string dataSource, IReadOnlyList<DynamicEntity> entities, string token, Guid? correlationId = null, CancellationToken? cancellationToken = null);
         string GetToken(CancellationToken? cancellationToken = null);
-        ApiResult<MediaFileDto> GetFile(string id, CancellationToken? cancellationToken = null);
+        ApiResult<MediaFileDto> GetFile(string fileId, CancellationToken? cancellationToken = null);
+        ApiResult<MediaFileDto> GetFileFromUniqueId(string UniqueIdentifier, CancellationToken? cancellationToken = null);
         ApiResult<PartialSuccessResponse<string, MediaFileDto, Error>> GetFilesBatch(GetMediaByUniqueIdentifiers identifiers, CancellationToken? cancellationToken = null);
         ApiResult<PartialSuccessResponse<string, UploadDto, UploadCreateError>> UploadFromLinks(UploadLinksRequest request, CancellationToken? cancellationToken = null);
         ApiResult<MediaFileDto> UploadFile(Stream content, UploadMetadata metadata, CancellationToken? cancellationToken = null);
@@ -113,16 +115,16 @@ namespace Occtoo.Onboarding.Sdk
             return tokenDocument.result.accessToken;
         }
 
-        public ApiResult<MediaFileDto> GetFile(string id, CancellationToken? cancellationToken = null)
+        public ApiResult<MediaFileDto> GetFile(string fileId, CancellationToken? cancellationToken = null)
         {
-            return GetFileAsync(id, cancellationToken).GetAwaiter().GetResult();
+            return GetFileAsync(fileId, cancellationToken).GetAwaiter().GetResult();
         }
 
-        public async Task<ApiResult<MediaFileDto>> GetFileAsync(string id, CancellationToken? cancellationToken = null)
+        public async Task<ApiResult<MediaFileDto>> GetFileAsync(string fileId, CancellationToken? cancellationToken = null)
         {
             CancellationToken valueOrDefaultCancelToken = cancellationToken.GetValueOrDefault();
             var token = await GetTokenThroughCache(valueOrDefaultCancelToken);
-            var message = new HttpRequestMessage(HttpMethod.Get, $"media/files/{id}")
+            var message = new HttpRequestMessage(HttpMethod.Get, $"media/files/{fileId}")
             {
                 Headers =
                 {
@@ -131,6 +133,28 @@ namespace Occtoo.Onboarding.Sdk
             };
             var response = await httpClient.SendAsync(message, valueOrDefaultCancelToken);
             return await GetApiResultFromResponse<MediaFileDto>(response);
+        }
+
+        public ApiResult<MediaFileDto> GetFileFromUniqueId(string UniqueIdentifier, CancellationToken? cancellationToken = null)
+        {
+            return GetFileFromUniqueIdAsync(UniqueIdentifier, cancellationToken).GetAwaiter().GetResult();
+        }
+
+        public async Task<ApiResult<MediaFileDto>> GetFileFromUniqueIdAsync(string UniqueIdentifier, CancellationToken? cancellationToken = null)
+        {
+            var mediaFileDto = new MediaFileDto();
+            var response = await GetFilesBatchAsync(new GetMediaByUniqueIdentifiers { UniqueIdentifiers = new List<string> { UniqueIdentifier } }, cancellationToken);
+            if(response.Result.Succeeded.Any())
+            {
+                mediaFileDto = response.Result.Succeeded.First().Value;
+            }
+
+            return new ApiResult<MediaFileDto>
+            {
+                Errors = response.Errors,
+                StatusCode = response.StatusCode,
+                Result = mediaFileDto
+            };
         }
 
         public ApiResult<PartialSuccessResponse<string, MediaFileDto, Error>> GetFilesBatch(GetMediaByUniqueIdentifiers uniqueIdentifiers, CancellationToken? cancellationToken = null)
