@@ -8,12 +8,13 @@ namespace Occtoo.Onboarding.Sdk.Tests
         private readonly string dataProviderId;
         private readonly string dataProviderSecret;
         private readonly string dataSource = "nugetTester";
-        private static Random random = new Random();
+        private static readonly Random random = new Random();
+        private readonly IConfiguration config;
 
         public OnboardingServiceClientTest()
         {
             var builder = new ConfigurationBuilder().AddUserSecrets<OnboardingServiceClientTest>();
-            var config = builder.Build();
+            config = builder.Build();
             dataProviderId = config["providerid"];
             dataProviderSecret = config["providersecret"];
         }
@@ -245,14 +246,8 @@ namespace Occtoo.Onboarding.Sdk.Tests
         {
             var request = new UploadLinksRequest(new List<FileUploadFromLink>
                 {
-                   new FileUploadFromLink(
-                       "https://www.occtoo.com/hs-fs/hubfs/Logo-Occtoo-dark.png?width=500&name=Logo-Occtoo-dark.png",
-                       "Logo-Occtoo-dark.png",
-                       "occtooLogoDark"),
-                   new FileUploadFromLink(
-                       "https://www.occtoo.com/hs-fs/hubfs/Petter.jpg?width=200&height=200&name=Petter.jpg",
-                       "petter.jpg",
-                       "petter")
+                   new FileUploadFromLink(config["fileUrl1"], config["fileName1"], config["fileUniqueId1"]),
+                   new FileUploadFromLink(config["fileUrl2"], config["fileName2"], config["fileUniqueId2"]),
                 }
             );
             var onboardingServliceClient = new OnboardingServiceClient(dataProviderId, dataProviderSecret);
@@ -264,7 +259,7 @@ namespace Occtoo.Onboarding.Sdk.Tests
         public async Task GetImageById()
         {
             var onboardingServliceClient = new OnboardingServiceClient(dataProviderId, dataProviderSecret);
-            var response = await onboardingServliceClient.GetFileAsync("5f639717-c581-4924-82e0-434b006fe149");
+            var response = await onboardingServliceClient.GetFileAsync(config["fileId"]);
             Console.WriteLine(response.Result.PublicUrl);
             Assert.Equal(200, response.StatusCode);
         }
@@ -273,7 +268,7 @@ namespace Occtoo.Onboarding.Sdk.Tests
         public async Task GetImageByUniqueId()
         {
             var onboardingServliceClient = new OnboardingServiceClient(dataProviderId, dataProviderSecret);
-            var response = await onboardingServliceClient.GetFileFromUniqueIdAsync("petter");
+            var response = await onboardingServliceClient.GetFileFromUniqueIdAsync(config["fileUniqueId2"]);
             Console.WriteLine(response.Result.PublicUrl);
             Assert.Equal(200, response.StatusCode);
         }
@@ -284,7 +279,7 @@ namespace Occtoo.Onboarding.Sdk.Tests
             var onboardingServliceClient = new OnboardingServiceClient(dataProviderId, dataProviderSecret);
             var response = await onboardingServliceClient.GetFilesBatchAsync(new GetMediaByUniqueIdentifiers
             {
-                UniqueIdentifiers = new List<string> { "occtooLogoDark", "petter" }
+                UniqueIdentifiers = new List<string> { config["fileUniqueId1"], config["fileUniqueId2"] }
             });
             Assert.Equal(200, response.StatusCode);
         }
@@ -295,7 +290,7 @@ namespace Occtoo.Onboarding.Sdk.Tests
             var onboardingServliceClient = new OnboardingServiceClient(dataProviderId, dataProviderSecret);
             var getResponse = await onboardingServliceClient.GetFilesBatchAsync(new GetMediaByUniqueIdentifiers
             {
-                UniqueIdentifiers = new List<string> { "petter" }
+                UniqueIdentifiers = new List<string> { config["fileUniqueId2"] }
             });
             var fileIdToDelete = getResponse.Result.Succeeded.First().Value.Id;
             var deleteResponse = await onboardingServliceClient.DeleteFileAsync(fileIdToDelete);
@@ -318,7 +313,7 @@ namespace Occtoo.Onboarding.Sdk.Tests
             var onboardingServliceClient = new OnboardingServiceClient(dataProviderId, dataProviderSecret);
             var httpClient = new HttpClient();
             var fileByteArray = await httpClient.GetByteArrayAsync("https://www.occtoo.com/hs-fs/hubfs/Petter.jpg?width=200&height=200&name=Petter.jpg");
-            var metadata = new UploadMetadata("petter", "image/jpeg", fileByteArray.Length, RandomString(4));
+            var metadata = new UploadMetadata(config["fileName2"], "image/jpeg", fileByteArray.Length, RandomString(4));
             var response = await onboardingServliceClient.UploadFileAsync(new MemoryStream(fileByteArray), metadata);
             Console.WriteLine(response.Result.PublicUrl);
             Assert.Equal(200, response.StatusCode);
@@ -330,7 +325,7 @@ namespace Occtoo.Onboarding.Sdk.Tests
             var onboardingServliceClient = new OnboardingServiceClient(dataProviderId, dataProviderSecret);
             var httpClient = new HttpClient();
             var fileByteArray = await httpClient.GetByteArrayAsync("https://www.occtoo.com/hs-fs/hubfs/Petter.jpg?width=200&height=200&name=Petter.jpg");
-            var metadata = new UploadMetadata("petter", "image/jpeg", fileByteArray.Length, "petterFromStream");
+            var metadata = new UploadMetadata(config["fileName2"], "image/jpeg", fileByteArray.Length, config["fileUniqueId3"]);
             var response = await onboardingServliceClient.UploadFileAsync(new MemoryStream(fileByteArray), metadata);
             Assert.Equal(409, response.StatusCode);
         }
