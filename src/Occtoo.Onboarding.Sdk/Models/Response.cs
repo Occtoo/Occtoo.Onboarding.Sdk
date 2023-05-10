@@ -65,11 +65,6 @@ namespace Occtoo.Onboarding.Sdk.Models
         public string Message { get; set; }
     }
 
-    public class UploadCreateError
-    {
-        public string Error { get; set; }
-    }
-
     public class UploadDto
     {
         public string Id { get; set; }

@@ -244,12 +244,11 @@ namespace Occtoo.Onboarding.Sdk.Tests
         [Fact]
         public async Task UploadImagesFromLinks()
         {
-            var request = new UploadLinksRequest(new List<FileUploadFromLink>
+            var request = new List<FileUploadFromLink>
                 {
                    new FileUploadFromLink(config["fileUrl1"], config["fileName1"], config["fileUniqueId1"]),
                    new FileUploadFromLink(config["fileUrl2"], config["fileName2"], config["fileUniqueId2"]),
-                }
-            );
+                };
             var onboardingServliceClient = new OnboardingServiceClient(dataProviderId, dataProviderSecret);
             var response = await onboardingServliceClient.UploadFromLinksAsync(request);
             Assert.False(response.Errors.Any());
@@ -277,10 +276,9 @@ namespace Occtoo.Onboarding.Sdk.Tests
         public async Task GetImages()
         {
             var onboardingServliceClient = new OnboardingServiceClient(dataProviderId, dataProviderSecret);
-            var response = await onboardingServliceClient.GetFilesBatchAsync(new GetMediaByUniqueIdentifiers
-            {
-                UniqueIdentifiers = new List<string> { config["fileUniqueId1"], config["fileUniqueId2"] }
-            });
+            var response = await onboardingServliceClient.GetFilesBatchAsync(
+                new List<string> { config["fileUniqueId1"], config["fileUniqueId2"] }
+            );
             Assert.Equal(200, response.StatusCode);
         }
 
@@ -288,10 +286,9 @@ namespace Occtoo.Onboarding.Sdk.Tests
         public async Task DeleteImage()
         {
             var onboardingServliceClient = new OnboardingServiceClient(dataProviderId, dataProviderSecret);
-            var getResponse = await onboardingServliceClient.GetFilesBatchAsync(new GetMediaByUniqueIdentifiers
-            {
-                UniqueIdentifiers = new List<string> { config["fileUniqueId2"] }
-            });
+            var getResponse = await onboardingServliceClient.GetFilesBatchAsync(
+                new List<string> { config["fileUniqueId2"] }
+            );
             var fileIdToDelete = getResponse.Result.Succeeded.First().Value.Id;
             var deleteResponse = await onboardingServliceClient.DeleteFileAsync(fileIdToDelete);
             Assert.Equal(204, deleteResponse.StatusCode);
