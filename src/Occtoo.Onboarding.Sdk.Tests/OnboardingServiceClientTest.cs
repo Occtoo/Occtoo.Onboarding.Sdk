@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Configuration;
+using Occtoo.Onboarding.Sdk.Models;
 
 namespace Occtoo.Onboarding.Sdk.Tests
 {
@@ -7,11 +8,13 @@ namespace Occtoo.Onboarding.Sdk.Tests
         private readonly string dataProviderId;
         private readonly string dataProviderSecret;
         private readonly string dataSource = "nugetTester";
+        private static readonly Random random = new Random();
+        private readonly IConfiguration config;
 
         public OnboardingServiceClientTest()
         {
             var builder = new ConfigurationBuilder().AddUserSecrets<OnboardingServiceClientTest>();
-            var config = builder.Build();
+            config = builder.Build();
             dataProviderId = config["providerid"];
             dataProviderSecret = config["providersecret"];
         }
@@ -236,6 +239,99 @@ namespace Occtoo.Onboarding.Sdk.Tests
             {
                 Assert.Equal("The operation was canceled.", e.Message);
             }
+        }
+
+        [Fact]
+        public async Task UploadImagesFromLinks()
+        {
+            var request = new List<FileUploadFromLink>
+                {
+                   new FileUploadFromLink(config["fileUrl1"], config["fileName1"], config["fileUniqueId1"]),
+                   new FileUploadFromLink(config["fileUrl2"], config["fileName2"], config["fileUniqueId2"]),
+                };
+            var onboardingServliceClient = new OnboardingServiceClient(dataProviderId, dataProviderSecret);
+            var response = await onboardingServliceClient.UploadFromLinksAsync(request);
+            Assert.False(response.Errors.Any());
+        }
+
+        [Fact]
+        public async Task GetImageById()
+        {
+            var onboardingServliceClient = new OnboardingServiceClient(dataProviderId, dataProviderSecret);
+            var response = await onboardingServliceClient.GetFileAsync(config["fileId"]);
+            Console.WriteLine(response.Result.PublicUrl);
+            Assert.Equal(200, response.StatusCode);
+        }
+
+        [Fact]
+        public async Task GetImageByUniqueId()
+        {
+            var onboardingServliceClient = new OnboardingServiceClient(dataProviderId, dataProviderSecret);
+            var response = await onboardingServliceClient.GetFileFromUniqueIdAsync(config["fileUniqueId2"]);
+            Console.WriteLine(response.Result.PublicUrl);
+            Assert.Equal(200, response.StatusCode);
+        }
+
+        [Fact]
+        public async Task GetImages()
+        {
+            var onboardingServliceClient = new OnboardingServiceClient(dataProviderId, dataProviderSecret);
+            var response = await onboardingServliceClient.GetFilesBatchAsync(
+                new List<string> { config["fileUniqueId1"], config["fileUniqueId2"] }
+            );
+            Assert.Equal(200, response.StatusCode);
+        }
+
+        [Fact]
+        public async Task DeleteImage()
+        {
+            var onboardingServliceClient = new OnboardingServiceClient(dataProviderId, dataProviderSecret);
+            var getResponse = await onboardingServliceClient.GetFilesBatchAsync(
+                new List<string> { config["fileUniqueId2"] }
+            );
+            var fileIdToDelete = getResponse.Result.Succeeded.First().Value.Id;
+            var deleteResponse = await onboardingServliceClient.DeleteFileAsync(fileIdToDelete);
+            Assert.Equal(204, deleteResponse.StatusCode);
+        }
+
+        [Fact]
+        public async Task TryingToDeleteImageThatDoesnotExist()
+        {
+            var onboardingServliceClient = new OnboardingServiceClient(dataProviderId, dataProviderSecret);
+            var fileIdToDelete = "foo";
+            var deleteResponse = await onboardingServliceClient.DeleteFileAsync(fileIdToDelete);
+            Assert.Equal(404, deleteResponse.StatusCode);
+        }
+
+
+        [Fact]
+        public async Task UploadFileFromStream()
+        {
+            var onboardingServliceClient = new OnboardingServiceClient(dataProviderId, dataProviderSecret);
+            var httpClient = new HttpClient();
+            var fileByteArray = await httpClient.GetByteArrayAsync("https://www.occtoo.com/hs-fs/hubfs/Petter.jpg?width=200&height=200&name=Petter.jpg");
+            var metadata = new UploadMetadata(config["fileName2"], "image/jpeg", fileByteArray.Length, RandomString(4));
+            var response = await onboardingServliceClient.UploadFileAsync(new MemoryStream(fileByteArray), metadata);
+            Console.WriteLine(response.Result.PublicUrl);
+            Assert.Equal(200, response.StatusCode);
+        }
+
+        [Fact]
+        public async Task UploadFileFromStreamShouldGiveAlreadyExistError()
+        {
+            var onboardingServliceClient = new OnboardingServiceClient(dataProviderId, dataProviderSecret);
+            var httpClient = new HttpClient();
+            var fileByteArray = await httpClient.GetByteArrayAsync("https://www.occtoo.com/hs-fs/hubfs/Petter.jpg?width=200&height=200&name=Petter.jpg");
+            var metadata = new UploadMetadata(config["fileName2"], "image/jpeg", fileByteArray.Length, config["fileUniqueId3"]);
+            var response = await onboardingServliceClient.UploadFileAsync(new MemoryStream(fileByteArray), metadata);
+            Assert.Equal(409, response.StatusCode);
+        }
+
+        private static string RandomString(int length)
+        {
+            const string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+            return new string(Enumerable.Repeat(chars, length)
+                .Select(s => s[random.Next(s.Length)]).ToArray());
         }
     }
 }

@@ -1,11 +1,16 @@
-﻿using Microsoft.Extensions.Caching.Memory;
+﻿using CSharpFunctionalExtensions;
+using Microsoft.Extensions.Caching.Memory;
 using Newtonsoft.Json;
+using Occtoo.Onboarding.Sdk.Models;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Reactive.Linq;
+using System.Runtime.Serialization;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -14,19 +19,36 @@ namespace Occtoo.Onboarding.Sdk
 {
     public interface IOnboardingServiceClient
     {
+        //Asynchronous
         Task<StartImportResponse> StartEntityImportAsync(string dataSource, IReadOnlyList<DynamicEntity> entities, Guid? correlationId = null, CancellationToken? cancellationToken = null);
-        StartImportResponse StartEntityImport(string dataSource, IReadOnlyList<DynamicEntity> entities, Guid? correlationId = null, CancellationToken? cancellationToken = null);
         Task<StartImportResponse> StartEntityImportAsync(string dataSource, IReadOnlyList<DynamicEntity> entities, string token, Guid? correlationId = null, CancellationToken? cancellationToken = null);
-        StartImportResponse StartEntityImport(string dataSource, IReadOnlyList<DynamicEntity> entities, string token, Guid? correlationId = null, CancellationToken? cancellationToken = null);
         Task<string> GetTokenAsync(CancellationToken? cancellationToken = null);
+        Task<ApiResult<MediaFileDto>> GetFileAsync(string fileId, CancellationToken? cancellationToken = null);
+        Task<ApiResult<MediaFileDto>> GetFileFromUniqueIdAsync(string UniqueIdentifier, CancellationToken? cancellationToken = null);
+        Task<ApiResult<PartialSuccessResponse<string, MediaFileDto, Error>>> GetFilesBatchAsync(List<string> identifiers, CancellationToken? cancellationToken = null);
+        Task<ApiResult<PartialSuccessResponse<string, UploadDto, Error>>> UploadFromLinksAsync(List<FileUploadFromLink> links, CancellationToken? cancellationToken = null);
+        Task<ApiResult<MediaFileDto>> UploadFileAsync(Stream content, UploadMetadata metadata, CancellationToken? cancellationToken = null);
+        Task<ApiResult<UploadDto>> GetUploadStatusAsync(string uploadId, CancellationToken? cancellationToken = null);
+        Task<ApiResult> DeleteFileAsync(string fileId, CancellationToken? cancellationToken = null);
+
+        //Synchronous
+        StartImportResponse StartEntityImport(string dataSource, IReadOnlyList<DynamicEntity> entities, Guid? correlationId = null, CancellationToken? cancellationToken = null);
+        StartImportResponse StartEntityImport(string dataSource, IReadOnlyList<DynamicEntity> entities, string token, Guid? correlationId = null, CancellationToken? cancellationToken = null);
+        string GetToken(CancellationToken? cancellationToken = null);
+        ApiResult<MediaFileDto> GetFile(string fileId, CancellationToken? cancellationToken = null);
+        ApiResult<MediaFileDto> GetFileFromUniqueId(string UniqueIdentifier, CancellationToken? cancellationToken = null);
+        ApiResult<PartialSuccessResponse<string, MediaFileDto, Error>> GetFilesBatch(List<string> identifiers, CancellationToken? cancellationToken = null);
+        ApiResult<PartialSuccessResponse<string, UploadDto, Error>> UploadFromLinks(List<FileUploadFromLink> links, CancellationToken? cancellationToken = null);
+        ApiResult<MediaFileDto> UploadFile(Stream content, UploadMetadata metadata, CancellationToken? cancellationToken = null);
+        ApiResult<UploadDto> GetUploadStatus(string uploadId, CancellationToken? cancellationToken = null);
+        ApiResult DeleteFile(string fileId, CancellationToken? cancellationToken = null);
     }
 
     public class OnboardingServiceClient : IOnboardingServiceClient, IDisposable
     {
-        private static readonly HttpClient HttpClient = new HttpClient()
+        private static readonly HttpClient httpClient = new HttpClient()
         {
-            BaseAddress = new Uri("https://ingest.occtoo.com"),
-            DefaultRequestHeaders = { { "ContentType", "application/json" } }
+            BaseAddress = new Uri("https://ingest.occtoo.com")
         };
         private readonly string cachekey = "token";
         private readonly string dataProviderId;
@@ -68,6 +90,10 @@ namespace Occtoo.Onboarding.Sdk
             return response;
         }
 
+        public string GetToken(CancellationToken? cancellationToken = null)
+        {
+            return GetTokenAsync(cancellationToken).GetAwaiter().GetResult();
+        }
         public async Task<string> GetTokenAsync(CancellationToken? cancellationToken = null)
         {
             CancellationToken valueOrDefaultCancelToken = cancellationToken.GetValueOrDefault();
@@ -79,7 +105,7 @@ namespace Occtoo.Onboarding.Sdk
                     secret = dataProviderSecret
                 }), Encoding.UTF8, "application/json")
             };
-            var tokenResponse = await HttpClient.SendAsync(tokenRequest, valueOrDefaultCancelToken);
+            var tokenResponse = await httpClient.SendAsync(tokenRequest, valueOrDefaultCancelToken);
             if (!tokenResponse.IsSuccessStatusCode)
             {
                 throw new ArgumentException("Couldn't obtain a token please check your dataprovider details");
@@ -88,6 +114,207 @@ namespace Occtoo.Onboarding.Sdk
             var tokenResponseContent = await tokenResponse.Content.ReadAsStringAsync();
             var tokenDocument = JsonConvert.DeserializeObject<TokenResponse>(tokenResponseContent);
             return tokenDocument.result.accessToken;
+        }
+
+        public ApiResult<MediaFileDto> GetFile(string fileId, CancellationToken? cancellationToken = null)
+        {
+            return GetFileAsync(fileId, cancellationToken).GetAwaiter().GetResult();
+        }
+
+        public async Task<ApiResult<MediaFileDto>> GetFileAsync(string fileId, CancellationToken? cancellationToken = null)
+        {
+            CancellationToken valueOrDefaultCancelToken = cancellationToken.GetValueOrDefault();
+            var token = await GetTokenThroughCache(valueOrDefaultCancelToken);
+            var message = new HttpRequestMessage(HttpMethod.Get, $"media/files/{fileId}")
+            {
+                Headers =
+                {
+                    { "Authorization", $"Bearer {token}" }
+                }
+            };
+            var response = await httpClient.SendAsync(message, valueOrDefaultCancelToken);
+            return await GetApiResultFromResponse<MediaFileDto>(response);
+        }
+
+        public ApiResult<MediaFileDto> GetFileFromUniqueId(string UniqueIdentifier, CancellationToken? cancellationToken = null)
+        {
+            return GetFileFromUniqueIdAsync(UniqueIdentifier, cancellationToken).GetAwaiter().GetResult();
+        }
+
+        public async Task<ApiResult<MediaFileDto>> GetFileFromUniqueIdAsync(string UniqueIdentifier, CancellationToken? cancellationToken = null)
+        {
+            var mediaFileDto = new MediaFileDto();
+            var response = await GetFilesBatchAsync(new List<string> { UniqueIdentifier }, cancellationToken);
+            if(response.Result.Succeeded.Any())
+            {
+                mediaFileDto = response.Result.Succeeded.First().Value;
+            }
+
+            return new ApiResult<MediaFileDto>
+            {
+                Errors = response.Errors,
+                StatusCode = response.StatusCode,
+                Result = mediaFileDto
+            };
+        }
+
+        public ApiResult<PartialSuccessResponse<string, MediaFileDto, Error>> GetFilesBatch(List<string> uniqueIdentifiers, CancellationToken? cancellationToken = null)
+        {
+            return GetFilesBatchAsync(uniqueIdentifiers, cancellationToken).GetAwaiter().GetResult();
+        }
+
+        public async Task<ApiResult<PartialSuccessResponse<string, MediaFileDto, Error>>> GetFilesBatchAsync(List<string> uniqueIdentifiers, CancellationToken? cancellationToken = null)
+        {
+            var content = new GetMediaByUniqueIdentifiers { UniqueIdentifiers = uniqueIdentifiers };
+            CancellationToken valueOrDefaultCancelToken = cancellationToken.GetValueOrDefault();
+            var token = await GetTokenThroughCache(valueOrDefaultCancelToken);
+            var message = new HttpRequestMessage(HttpMethod.Post, "media/files/batch")
+            {
+                Headers =
+                {
+                    { "Authorization", $"Bearer {token}" },
+                },
+                Content = new StringContent(JsonConvert.SerializeObject(content), Encoding.UTF8, "application/json")
+            };
+            var response = await httpClient.SendAsync(message, valueOrDefaultCancelToken);
+            return await GetApiResultFromResponse<PartialSuccessResponse<string, MediaFileDto, Error>>(response); ;
+        }
+
+        public ApiResult<PartialSuccessResponse<string, UploadDto, Error>> UploadFromLinks(List<FileUploadFromLink> links, CancellationToken? cancellationToken = null)
+        {
+            return UploadFromLinksAsync(links, cancellationToken).GetAwaiter().GetResult();
+        }
+
+        /// <summary>
+        /// Initiates asynchronous upload of files using URL to them. 
+        /// Since the upload is asynchronous the client should periodiacally 
+        /// check it's state using GetUploadStatusAsync method.
+        /// Will skip file if UniqueIdentifier on the file already exists.
+        /// </summary>
+        /// <param name="request">List of links to upload</param>
+        /// <param name="cancellationToken">Own cancellation token can be provided</param>
+        /// <returns></returns>
+        public async Task<ApiResult<PartialSuccessResponse<string, UploadDto, Error>>> UploadFromLinksAsync(List<FileUploadFromLink> links, CancellationToken? cancellationToken = null)
+        {
+            var content = new UploadLinksRequest(links);
+            CancellationToken valueOrDefaultCancelToken = cancellationToken.GetValueOrDefault();
+            var token = await GetTokenThroughCache(valueOrDefaultCancelToken);
+            var message = new HttpRequestMessage(HttpMethod.Put, "media/uploads/links")
+            {
+                Headers =
+                {
+                    { "Authorization", $"Bearer {token}" },
+                },
+                Content = new StringContent(JsonConvert.SerializeObject(content), Encoding.UTF8, "application/json")
+            };
+            var response = await httpClient.SendAsync(message, valueOrDefaultCancelToken);
+            return await GetApiResultFromResponse<PartialSuccessResponse<string, UploadDto, Error>>(response);
+        }
+
+        public ApiResult<UploadDto> GetUploadStatus(string uploadId, CancellationToken? cancellationToken = null)
+        {
+            return GetUploadStatusAsync(uploadId, cancellationToken).GetAwaiter().GetResult();
+        }
+
+        /// <summary>
+        /// Retrieves the upload information and state using the upload id
+        /// </summary>
+        /// <param name="uploadId">Id of the upload to check</param>
+        /// <param name="cancellationToken">Own cancellation token can be provided</param>
+        /// <returns></returns>
+        public async Task<ApiResult<UploadDto>> GetUploadStatusAsync(string uploadId, CancellationToken? cancellationToken = null)
+        {
+            CancellationToken valueOrDefaultCancelToken = cancellationToken.GetValueOrDefault();
+            var token = await GetTokenThroughCache(valueOrDefaultCancelToken);
+            var message = new HttpRequestMessage(HttpMethod.Get, $"media/uploads/{uploadId}")
+            {
+                Headers =
+                {
+                    { "Authorization", $"Bearer {token}" }
+                }
+            };
+            var response = await httpClient.SendAsync(message, valueOrDefaultCancelToken);
+            return await GetApiResultFromResponse<UploadDto>(response);
+        }
+
+        public ApiResult DeleteFile(string fileId, CancellationToken? cancellationToken = null)
+        {
+            return DeleteFileAsync(fileId, cancellationToken).GetAwaiter().GetResult();
+        }
+
+        public async Task<ApiResult> DeleteFileAsync(string fileId, CancellationToken? cancellationToken = null)
+        {
+            CancellationToken valueOrDefaultCancelToken = cancellationToken.GetValueOrDefault();
+            var token = await GetTokenThroughCache(valueOrDefaultCancelToken);
+            var message = new HttpRequestMessage(HttpMethod.Delete, $"media/files/{fileId}")
+            {
+                Headers =
+                {
+                    { "Authorization", $"Bearer {token}" }
+                }
+            };
+            var response = await httpClient.SendAsync(message, valueOrDefaultCancelToken);
+            if (response.IsSuccessStatusCode)
+            {
+                return new ApiResult
+                {
+                    StatusCode = (int)response.StatusCode
+                };
+            }
+            else
+            {
+                var apiResult = JsonConvert.DeserializeObject<ApiResult>(await response.Content.ReadAsStringAsync());
+                apiResult.StatusCode = (int)response.StatusCode;
+                return apiResult;
+            }
+        }
+
+        public ApiResult<MediaFileDto> UploadFile(Stream content, UploadMetadata metadata, CancellationToken? cancellationToken = null)
+        {
+            return UploadFileAsync(content, metadata, cancellationToken).GetAwaiter().GetResult();
+        }
+       
+        public async Task<ApiResult<MediaFileDto>> UploadFileAsync(Stream content, UploadMetadata metadata, CancellationToken? cancellationToken = null)
+        {
+            CancellationToken valueOrDefaultCancelToken = cancellationToken.GetValueOrDefault();
+            var fileResponse = await CreateFileAsync((int)metadata.Size, UploadMetadata.Serialize(metadata).Value, cancellationToken);
+            if (!fileResponse.IsSuccessStatusCode)
+            {
+                return new ApiResult<MediaFileDto>
+                {
+                    Errors = new Error[1] { new Error(await fileResponse.Content.ReadAsStringAsync()) },
+                    StatusCode = 409
+                };
+            }
+
+            var fileId = GetFileId(fileResponse);
+            if (fileId.IsFailure)
+            {
+                return new ApiResult<MediaFileDto>
+                {
+                    Errors = new Error[1] { fileId.Error },
+                    StatusCode = 500
+                };
+            }
+
+            var uploadResponse = await CreateObservableUpload(fileId.Value, content, 0L, valueOrDefaultCancelToken).LastOrDefaultAsync();
+            if (!uploadResponse.IsCompleted)
+            {
+                return new ApiResult<MediaFileDto>
+                {
+                    Errors = new Error[1] { new Error($"Could only complete {uploadResponse.CompletedPercentage} percentage of the file.") },
+                    StatusCode = 500
+                };
+            }
+
+            return await GetFileAsync(fileId.Value, valueOrDefaultCancelToken);
+        }
+
+        private static async Task<ApiResult<T>> GetApiResultFromResponse<T>(HttpResponseMessage response)
+        {
+            var apiResult = JsonConvert.DeserializeObject<ApiResult<T>>(await response.Content.ReadAsStringAsync());
+            apiResult.StatusCode = (int)response.StatusCode;
+            return apiResult;
         }
 
         private static async Task<StartImportResponse> EntityImportAsync(string dataSource, IEnumerable<DynamicEntity> validEntities, string token, CancellationToken cancellationToken, Guid? correlationId = null)
@@ -104,7 +331,7 @@ namespace Occtoo.Onboarding.Sdk
             {
                 Entities = validEntities
             }), Encoding.UTF8, "application/json");
-            var ingestResponse = await HttpClient.SendAsync(ingestRequest, cancellationToken);
+            var ingestResponse = await httpClient.SendAsync(ingestRequest, cancellationToken);
             if (!ingestResponse.IsSuccessStatusCode)
             {
                 switch (ingestResponse.StatusCode)
@@ -188,6 +415,103 @@ namespace Occtoo.Onboarding.Sdk
             return validEntitites;
         }
 
-        public void Dispose() => HttpClient?.Dispose();
+        #region TUS, open protocol for resumable file uploads https://tus.io/
+        /// <summary>
+        /// An empty POST request is used to create a new upload resource. 
+        /// The Upload-Length header indicates the size of the entire upload in bytes.
+        /// </summary>
+        /// <param name="contentLength">Length of the upload in bytes</param>
+        /// <param name="metadata">
+        /// The Upload-Metadata requestand response header MUST consist of one or more comma-separated key-valuepairs. 
+        /// The key and value MUST be separated by a space. The key MUST NOTcontain spaces and commas and MUST NOT be empty. 
+        /// The key SHOULD be ASCIIencoded and the value MUST be Base64 encoded. All keys MUST be unique. Thevalue MAY be empty. 
+        /// In these cases, the space, which would normally separatethe key and the value, MAY be left out. Since metadata can 
+        /// contain arbitrarybinary values, Servers SHOULD carefully validate metadata values or sanitizethem before using them 
+        /// as header values to avoid header smuggling.
+        /// </param>
+        /// <param name="cancellationToken">Own cancellation token can be provided</param>
+        /// <returns></returns>
+        private async Task<HttpResponseMessage> CreateFileAsync(int contentLength, string metadata, CancellationToken? cancellationToken = null)
+        {
+            CancellationToken valueOrDefaultCancelToken = cancellationToken.GetValueOrDefault();
+            var token = await GetTokenThroughCache(valueOrDefaultCancelToken);
+            var message = new HttpRequestMessage(HttpMethod.Post, "media/uploads/files")
+            {
+                Headers =
+                {
+                    {"Authorization", $"Bearer {token}" },
+                    {"Tus-Resumable", "1.0.0"},
+                    {"Upload-Length", contentLength.ToString()},
+                    {"Upload-Metadata", metadata},
+                    {"Upload-Offset", "0"}
+                }
+            };
+            return await httpClient.SendAsync(message, valueOrDefaultCancelToken);
+        }
+
+        /// <summary>
+        /// All PATCH requests MUST use Content-Type: application/offset+octet-stream, 
+        /// otherwise the server SHOULD return a 415 Unsupported Media Type status.'
+        /// </summary>
+        /// <param name="fileId">Id of the file</param>
+        /// <param name="bufferLength">Length of the buffer</param>
+        /// <param name="currentOffset">Current offset</param>
+        /// <param name="memoryStream">The stream to patch with</param>
+        /// <param name="cancellationToken">Own cancellation token can be provided</param>
+        /// <returns></returns>
+        private async Task<HttpResponseMessage> PatchFileAsync(string fileId, int bufferLength, long currentOffset, MemoryStream memoryStream, CancellationToken? cancellationToken = null)
+        {
+            CancellationToken valueOrDefaultCancelToken = cancellationToken.GetValueOrDefault();
+            var token = await GetTokenThroughCache(valueOrDefaultCancelToken);
+            var message = new HttpRequestMessage(new HttpMethod("patch"), $"media/uploads/files/{fileId}")
+            {
+                Headers =
+                {
+                    {"Authorization", $"Bearer {token}" },
+                    {"Tus-Resumable", "1.0.0"},
+                    {"Upload-Offset", currentOffset.ToString()},
+                },
+                Content = new StreamContent(memoryStream, bufferLength)
+                {
+                    Headers = { { "Content-Type", "application/offset+octet-stream" } }
+                }
+            };
+            return await httpClient.SendAsync(message, valueOrDefaultCancelToken);
+        }
+
+        private IObservable<Progress> CreateObservableUpload(string fileId, Stream content, long offset, CancellationToken cancellationToken)
+        {
+            int chunkSize = 4194304; // 4mb
+            long currentOffset = offset;
+            var observable = Observable.Create<Progress>(async observer =>
+            {
+                while (currentOffset < content.Length)
+                {
+                    var buffer = new byte[Math.Min(chunkSize, content.Length - currentOffset)];
+                    var bytesRead = await content.ReadAsync(buffer, 0, buffer.Length, cancellationToken);
+                    HttpResponseMessage patchResponse = await PatchFileAsync(
+                        fileId,
+                        buffer.Length,
+                        currentOffset,
+                        new MemoryStream(buffer));
+                    currentOffset = Int32.Parse(patchResponse.Headers.GetValues("Upload-Offset").First());
+                    observer.OnNext(new Progress(content.Length, currentOffset, (currentOffset / content.Length) * 100,
+                        content.Length == currentOffset));
+                }
+
+                observer.OnCompleted();
+            });
+            return observable;
+        }
+
+        private static Result<string, Error> GetFileId(HttpResponseMessage response)
+        {
+            if (response.Headers.TryGetValues("Location", out var location))
+                return location.First().Split('/').Last();
+            return Result.Failure<string, Error>(new Error("Upload failed. File creation response does not contain file location in header"));
+        }
+        #endregion
+
+        public void Dispose() => httpClient?.Dispose();
     }
 }
