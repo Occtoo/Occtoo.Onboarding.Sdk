@@ -19,6 +19,7 @@ namespace Occtoo.Onboarding.Sdk
         Task<ApiResult<MediaFileDto>> UploadFromLinkAsync(FileUploadFromLink link, CancellationToken? cancellationToken = null);
         Task<ApiResult<PartialSuccessResponse<string, UploadDto, Error>>> UploadFromLinksAsync(List<FileUploadFromLink> links, CancellationToken? cancellationToken = null);
         Task<ApiResult<MediaFileDto>> UploadFileAsync(Stream content, UploadMetadata metadata, CancellationToken? cancellationToken = null);
+        Task<ApiResult<MediaFileDto>> UploadFileIfNotExistAsync(Stream content, UploadMetadata metadata, CancellationToken? cancellationToken = null);
         Task<ApiResult<UploadDto>> GetUploadStatusAsync(string uploadId, CancellationToken? cancellationToken = null);
         Task<ApiResult> DeleteFileAsync(string fileId, CancellationToken? cancellationToken = null);
 
@@ -32,6 +33,7 @@ namespace Occtoo.Onboarding.Sdk
         ApiResult<MediaFileDto> UploadFromLink(FileUploadFromLink link, CancellationToken? cancellationToken = null);
         ApiResult<PartialSuccessResponse<string, UploadDto, Error>> UploadFromLinks(List<FileUploadFromLink> links, CancellationToken? cancellationToken = null);
         ApiResult<MediaFileDto> UploadFile(Stream content, UploadMetadata metadata, CancellationToken? cancellationToken = null);
+        ApiResult<MediaFileDto> UploadFileIfNotExist(Stream content, UploadMetadata metadata, CancellationToken? cancellationToken = null);
         ApiResult<UploadDto> GetUploadStatus(string uploadId, CancellationToken? cancellationToken = null);
         ApiResult DeleteFile(string fileId, CancellationToken? cancellationToken = null);
     }

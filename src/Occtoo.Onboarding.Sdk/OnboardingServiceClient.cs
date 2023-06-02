@@ -2,6 +2,7 @@
 using Microsoft.Extensions.Caching.Memory;
 using Newtonsoft.Json;
 using Occtoo.Onboarding.Sdk.Models;
+using Polly;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -10,9 +11,11 @@ using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Reactive.Linq;
+using System.Runtime.InteropServices.ComTypes;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Xml;
 
 namespace Occtoo.Onboarding.Sdk
 {
@@ -314,6 +317,33 @@ namespace Occtoo.Onboarding.Sdk
             }
 
             return await GetFileAsync(fileId.Value, valueOrDefaultCancelToken);
+        }
+
+        public ApiResult<MediaFileDto> UploadFileIfNotExist(Stream content, UploadMetadata metadata, CancellationToken? cancellationToken = null)
+        { 
+            return UploadFileIfNotExistAsync(content, metadata, cancellationToken).GetAwaiter().GetResult();
+        }
+
+        public async Task<ApiResult<MediaFileDto>> UploadFileIfNotExistAsync(Stream content, UploadMetadata metadata, CancellationToken? cancellationToken = null)
+        {
+            if (string.IsNullOrWhiteSpace(metadata.UniqueIdentifier))
+            {
+                return new ApiResult<MediaFileDto> { StatusCode = 400, Errors = new Error[1] { new Error("UniqueIdentifyer can not be null or empty") } };
+            }
+
+            var uploadResponse = await UploadFileAsync(content, metadata, cancellationToken);
+            if (uploadResponse.StatusCode == 409) //File already exist
+            {
+                var fileRequest = await GetFileFromUniqueIdAsync(metadata.UniqueIdentifier);
+                if (fileRequest.StatusCode != 200)
+                {
+                    return new ApiResult<MediaFileDto> { StatusCode = fileRequest.StatusCode, Errors = fileRequest.Errors };
+                }
+
+                return fileRequest;
+            }
+
+            return uploadResponse;
         }
 
         private static async Task<ApiResult<T>> GetApiResultFromResponse<T>(HttpResponseMessage response)
