@@ -255,6 +255,16 @@ namespace Occtoo.Onboarding.Sdk.Tests
         }
 
         [Fact]
+        public async Task UploadImageFromLink()
+        {
+            var fileToUpload = new FileUploadFromLink(config["fileUrl1"], config["fileName1"], config["fileUniqueId1"]);
+            var onboardingServliceClient = new OnboardingServiceClient(dataProviderId, dataProviderSecret);
+            var response = await onboardingServliceClient.UploadFromLinkAsync(fileToUpload);
+            Console.WriteLine(response.Result.PublicUrl);
+            Assert.Equal(200, response.StatusCode);
+        }
+
+        [Fact]
         public async Task GetImageById()
         {
             var onboardingServliceClient = new OnboardingServiceClient(dataProviderId, dataProviderSecret);
