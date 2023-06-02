@@ -317,6 +317,18 @@ namespace Occtoo.Onboarding.Sdk.Tests
         }
 
         [Fact]
+        public async Task UploadFileThatAlreadyExistFromStream()
+        {
+            var onboardingServliceClient = new OnboardingServiceClient(dataProviderId, dataProviderSecret);
+            var httpClient = new HttpClient();
+            var fileByteArray = await httpClient.GetByteArrayAsync("https://www.occtoo.com/hs-fs/hubfs/Petter.jpg?width=200&height=200&name=Petter.jpg");
+            var metadata = new UploadMetadata(config["fileName2"], "image/jpeg", fileByteArray.Length, RandomString(4));
+            var response = await onboardingServliceClient.UploadFileIfNotExistAsync(new MemoryStream(fileByteArray), metadata);
+            Console.WriteLine(response.Result.PublicUrl);
+            Assert.Equal(200, response.StatusCode);
+        }
+
+        [Fact]
         public async Task UploadFileFromStreamShouldGiveAlreadyExistError()
         {
             var onboardingServliceClient = new OnboardingServiceClient(dataProviderId, dataProviderSecret);
