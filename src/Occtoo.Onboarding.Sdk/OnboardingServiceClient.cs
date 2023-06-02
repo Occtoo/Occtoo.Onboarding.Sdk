@@ -10,7 +10,6 @@ using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Reactive.Linq;
-using System.Runtime.Serialization;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -26,6 +25,7 @@ namespace Occtoo.Onboarding.Sdk
         Task<ApiResult<MediaFileDto>> GetFileAsync(string fileId, CancellationToken? cancellationToken = null);
         Task<ApiResult<MediaFileDto>> GetFileFromUniqueIdAsync(string UniqueIdentifier, CancellationToken? cancellationToken = null);
         Task<ApiResult<PartialSuccessResponse<string, MediaFileDto, Error>>> GetFilesBatchAsync(List<string> identifiers, CancellationToken? cancellationToken = null);
+        Task<ApiResult<MediaFileDto>> UploadFromLinkAsync(FileUploadFromLink link, CancellationToken? cancellationToken = null);
         Task<ApiResult<PartialSuccessResponse<string, UploadDto, Error>>> UploadFromLinksAsync(List<FileUploadFromLink> links, CancellationToken? cancellationToken = null);
         Task<ApiResult<MediaFileDto>> UploadFileAsync(Stream content, UploadMetadata metadata, CancellationToken? cancellationToken = null);
         Task<ApiResult<UploadDto>> GetUploadStatusAsync(string uploadId, CancellationToken? cancellationToken = null);
@@ -38,6 +38,7 @@ namespace Occtoo.Onboarding.Sdk
         ApiResult<MediaFileDto> GetFile(string fileId, CancellationToken? cancellationToken = null);
         ApiResult<MediaFileDto> GetFileFromUniqueId(string UniqueIdentifier, CancellationToken? cancellationToken = null);
         ApiResult<PartialSuccessResponse<string, MediaFileDto, Error>> GetFilesBatch(List<string> identifiers, CancellationToken? cancellationToken = null);
+        ApiResult<MediaFileDto> UploadFromLink(FileUploadFromLink link, CancellationToken? cancellationToken = null);
         ApiResult<PartialSuccessResponse<string, UploadDto, Error>> UploadFromLinks(List<FileUploadFromLink> links, CancellationToken? cancellationToken = null);
         ApiResult<MediaFileDto> UploadFile(Stream content, UploadMetadata metadata, CancellationToken? cancellationToken = null);
         ApiResult<UploadDto> GetUploadStatus(string uploadId, CancellationToken? cancellationToken = null);
@@ -145,7 +146,7 @@ namespace Occtoo.Onboarding.Sdk
         {
             var mediaFileDto = new MediaFileDto();
             var response = await GetFilesBatchAsync(new List<string> { UniqueIdentifier }, cancellationToken);
-            if(response.Result.Succeeded.Any())
+            if (response.Result.Succeeded.Any())
             {
                 mediaFileDto = response.Result.Succeeded.First().Value;
             }
@@ -191,7 +192,7 @@ namespace Occtoo.Onboarding.Sdk
         /// check it's state using GetUploadStatusAsync method.
         /// Will skip file if UniqueIdentifier on the file already exists.
         /// </summary>
-        /// <param name="request">List of links to upload</param>
+        /// <param name="links">List of links to upload</param>
         /// <param name="cancellationToken">Own cancellation token can be provided</param>
         /// <returns></returns>
         public async Task<ApiResult<PartialSuccessResponse<string, UploadDto, Error>>> UploadFromLinksAsync(List<FileUploadFromLink> links, CancellationToken? cancellationToken = null)
@@ -209,6 +210,40 @@ namespace Occtoo.Onboarding.Sdk
             };
             var response = await httpClient.SendAsync(message, valueOrDefaultCancelToken);
             return await GetApiResultFromResponse<PartialSuccessResponse<string, UploadDto, Error>>(response);
+        }
+
+        public ApiResult<MediaFileDto> UploadFromLink(FileUploadFromLink link, CancellationToken? cancellationToken = null)
+        {
+            return UploadFromLinkAsync(link, cancellationToken).GetAwaiter().GetResult();
+        }
+
+        /// <summary>
+        /// Initiates asynchronous upload of a file using the URL to it. 
+        /// Will skip file if UniqueIdentifier on the file already exists.
+        /// </summary>
+        /// <param name="link">link to upload</param>
+        /// <param name="cancellationToken">Own cancellation token can be provided</param>
+        /// <returns></returns>
+        public async Task<ApiResult<MediaFileDto>> UploadFromLinkAsync(FileUploadFromLink link, CancellationToken? cancellationToken = null)
+        {
+            if (string.IsNullOrWhiteSpace(link.UniqueIdentifier))
+            {
+                return new ApiResult<MediaFileDto> { StatusCode = 400, Errors = new Error[1] { new Error("UniqueIdentifyer can not be null or empty") } };
+            }
+
+            var uploadResponse = await UploadFromLinksAsync(new List<FileUploadFromLink> { link }, cancellationToken);
+            if (uploadResponse.StatusCode != 202)
+            {
+                return new ApiResult<MediaFileDto> { StatusCode = uploadResponse.StatusCode, Errors = uploadResponse.Errors };
+            }
+
+            var fileRequest = await GetFileFromUniqueIdAsync(link.UniqueIdentifier);
+            if (fileRequest.StatusCode != 200)
+            {
+                return new ApiResult<MediaFileDto> { StatusCode = fileRequest.StatusCode, Errors = fileRequest.Errors };
+            }
+
+            return fileRequest;
         }
 
         public ApiResult<UploadDto> GetUploadStatus(string uploadId, CancellationToken? cancellationToken = null)
@@ -273,7 +308,7 @@ namespace Occtoo.Onboarding.Sdk
         {
             return UploadFileAsync(content, metadata, cancellationToken).GetAwaiter().GetResult();
         }
-       
+
         public async Task<ApiResult<MediaFileDto>> UploadFileAsync(Stream content, UploadMetadata metadata, CancellationToken? cancellationToken = null)
         {
             CancellationToken valueOrDefaultCancelToken = cancellationToken.GetValueOrDefault();
