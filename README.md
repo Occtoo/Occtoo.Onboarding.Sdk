@@ -39,3 +39,47 @@ static async Task Main(string[] args)
     }
 }
 ```
+
+
+## Media Onboarding Example
+```cs
+private readonly string dataProviderId = config["providerid"];
+private readonly string dataProviderSecret= config["providersecret"];
+private readonly string dataSource = "Media";
+
+static async Task Main(string[] args)
+{
+    var onboardingServliceClient = new OnboardingServiceClient(dataProviderId, dataProviderSecret);
+    var fileToUpload = new FileUploadFromLink(
+                "https://www.google.com/images/branding/googlelogo/1x/googlelogo_color_272x92dp.png",
+                "googlelogo_color_272x92dp.png", 
+                "googleLogo");
+    var response = await onboardingServliceClient.UploadFromLinkAsync(fileToUpload);
+    if(response.StatusCode == 200)
+    {
+        // Media was onboarded!
+        // Lets make a datasource to show in the api
+        var uploadDto = response.Result;
+        var enties = new List<DynamicEntity>
+        {
+            new DynamicEntity
+            {
+                Key = uploadDto.Id,
+                Properties= {
+                    new DynamicProperty { Id= "url", Value = ruploadDtoPublicUrl },
+                    new DynamicProperty { Id= "name", Value = uploadDto.MetaData.Filename },
+                    new DynamicProperty { Id= "mimeType", Value = uploadDto.MetaData.MimeType },
+                    new DynamicProperty { Id= "size", Value = uploadDto.MetaData.Size },
+                    new DynamicProperty { Id= "uniqueIdentifier", Value = uploadDto.MetaData.UniqueIdentifier }
+                }
+            },
+        };
+
+        var response = await onboardingServliceClient.StartEntityImportAsync(dataSource, enties);
+        if(response.StatusCode == 202)
+        {
+            // Data was onboarded!
+        }
+    }
+}
+```
