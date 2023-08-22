@@ -120,16 +120,31 @@ namespace Occtoo.Onboarding.Sdk
         {
             var mediaFileDto = new MediaFileDto();
             var response = await GetFilesBatchAsync(new List<string> { UniqueIdentifier }, cancellationToken);
-            if (response.Result.Succeeded.Any())
+            if(response.Errors.Any())
             {
-                mediaFileDto = response.Result.Succeeded.First().Value;
+                return new ApiResult<MediaFileDto>
+                {
+                    Errors = response.Errors,
+                    StatusCode = response.StatusCode,
+                    Result = mediaFileDto
+                };
+            }
+
+            if (response.Result.Failures.Any())
+            {
+                return new ApiResult<MediaFileDto>
+                {
+                    Errors = new Error[] { new Error("MediaFile not found in tenant") },
+                    StatusCode = 404,
+                    Result = mediaFileDto
+                };
             }
 
             return new ApiResult<MediaFileDto>
             {
                 Errors = response.Errors,
                 StatusCode = response.StatusCode,
-                Result = mediaFileDto
+                Result = response.Result.Succeeded.First().Value
             };
         }
 
