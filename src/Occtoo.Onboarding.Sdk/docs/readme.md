@@ -43,3 +43,5 @@ static async Task Main(string[] args)
 
 [Code repository on github](https://github.com/Occtoo/Occtoo.Onboarding.Sdk)
 
+## Release Notes 2.0.2
+Bugfix for GetFileFromUniqueIdAsync to return 404 instead of 202 when no file found.
