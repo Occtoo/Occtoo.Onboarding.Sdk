@@ -37,31 +37,21 @@ namespace Occtoo.Onboarding.Sdk
             cache = new MemoryCache(new MemoryCacheOptions());
         }
 
-        public StartImportResponse StartEntityImport(string dataSource, IReadOnlyList<DynamicEntity> entities, Guid? correlationId = null, CancellationToken? cancellationToken = null)
-        {
-            return StartEntityImportAsync(dataSource, entities, correlationId, cancellationToken).GetAwaiter().GetResult();
-        }
-        public StartImportResponse StartEntityImport(string dataSource, IReadOnlyList<DynamicEntity> entities, string token, Guid? correlationId = null, CancellationToken? cancellationToken = null)
+        public StartImportResponse StartEntityImport(string dataSource, IReadOnlyList<DynamicEntity> entities, string token = null, Guid? correlationId = null, CancellationToken? cancellationToken = null)
         {
             return StartEntityImportAsync(dataSource, entities, token, correlationId, cancellationToken).GetAwaiter().GetResult();
         }
-
-        public async Task<StartImportResponse> StartEntityImportAsync(string dataSource, IReadOnlyList<DynamicEntity> entities, Guid? correlationId = null, CancellationToken? cancellationToken = null)
+       
+        public async Task<StartImportResponse> StartEntityImportAsync(string dataSource, IReadOnlyList<DynamicEntity> entities, string token = null, Guid? correlationId = null, CancellationToken? cancellationToken = null)
         {
             var validEntities = ValidateParametes(dataSource, entities, cancellationToken);
             CancellationToken valueOrDefaultCancelToken = cancellationToken.GetValueOrDefault();
-            var token = await GetTokenThroughCache(valueOrDefaultCancelToken);
+            if (string.IsNullOrWhiteSpace(token))
+            {
+                token = await GetTokenThroughCache(valueOrDefaultCancelToken);
+            }
+
             var response = await EntityImportAsync(dataSource, validEntities, token, valueOrDefaultCancelToken, correlationId);
-
-            return response;
-        }
-
-        public async Task<StartImportResponse> StartEntityImportAsync(string dataSource, IReadOnlyList<DynamicEntity> entities, string token, Guid? correlationId = null, CancellationToken? cancellationToken = null)
-        {
-            var validEntities = ValidateParametes(dataSource, entities, cancellationToken);
-            CancellationToken valueOrDefaultCancelToken = cancellationToken.GetValueOrDefault();
-            var response = await EntityImportAsync(dataSource, validEntities, token, valueOrDefaultCancelToken, correlationId);
-
             return response;
         }
 
@@ -69,6 +59,7 @@ namespace Occtoo.Onboarding.Sdk
         {
             return GetTokenAsync(cancellationToken).GetAwaiter().GetResult();
         }
+        
         public async Task<string> GetTokenAsync(CancellationToken? cancellationToken = null)
         {
             CancellationToken valueOrDefaultCancelToken = cancellationToken.GetValueOrDefault();

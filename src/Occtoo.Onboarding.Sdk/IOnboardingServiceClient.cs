@@ -10,8 +10,7 @@ namespace Occtoo.Onboarding.Sdk
     public interface IOnboardingServiceClient
     {
         //Asynchronous
-        Task<StartImportResponse> StartEntityImportAsync(string dataSource, IReadOnlyList<DynamicEntity> entities, Guid? correlationId = null, CancellationToken? cancellationToken = null);
-        Task<StartImportResponse> StartEntityImportAsync(string dataSource, IReadOnlyList<DynamicEntity> entities, string token, Guid? correlationId = null, CancellationToken? cancellationToken = null);
+        Task<StartImportResponse> StartEntityImportAsync(string dataSource, IReadOnlyList<DynamicEntity> entities, string token = null, Guid? correlationId = null, CancellationToken? cancellationToken = null);
         Task<string> GetTokenAsync(CancellationToken? cancellationToken = null);
         Task<ApiResult<MediaFileDto>> GetFileAsync(string fileId, string token = null, CancellationToken? cancellationToken = null);
         Task<ApiResult<MediaFileDto>> GetFileFromUniqueIdAsync(string UniqueIdentifier, string token = null, CancellationToken? cancellationToken = null);
@@ -24,8 +23,7 @@ namespace Occtoo.Onboarding.Sdk
         Task<ApiResult> DeleteFileAsync(string fileId, string token = null, CancellationToken? cancellationToken = null);
 
         //Synchronous
-        StartImportResponse StartEntityImport(string dataSource, IReadOnlyList<DynamicEntity> entities, Guid? correlationId = null, CancellationToken? cancellationToken = null);
-        StartImportResponse StartEntityImport(string dataSource, IReadOnlyList<DynamicEntity> entities, string token, Guid? correlationId = null, CancellationToken? cancellationToken = null);
+        StartImportResponse StartEntityImport(string dataSource, IReadOnlyList<DynamicEntity> entities, string token = null, Guid? correlationId = null, CancellationToken? cancellationToken = null);
         string GetToken(CancellationToken? cancellationToken = null);
         ApiResult<MediaFileDto> GetFile(string fileId, string token = null, CancellationToken? cancellationToken = null);
         ApiResult<MediaFileDto> GetFileFromUniqueId(string UniqueIdentifier, string token = null, CancellationToken? cancellationToken = null);
