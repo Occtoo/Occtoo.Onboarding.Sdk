@@ -233,7 +233,7 @@ namespace Occtoo.Onboarding.Sdk.Tests
             {
                 var cancelToken = new CancellationTokenSource();
                 cancelToken.Cancel();
-                var response = await onboardingServliceClient.StartEntityImportAsync(dataSource, enties, null, cancelToken.Token);
+                var response = await onboardingServliceClient.StartEntityImportAsync(dataSource, enties, null, null, cancelToken.Token);
             }
             catch (OperationCanceledException e)
             {
