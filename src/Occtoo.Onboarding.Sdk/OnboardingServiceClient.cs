@@ -373,8 +373,18 @@ namespace Occtoo.Onboarding.Sdk
 
         private static async Task<ApiResult<T>> GetApiResultFromResponse<T>(HttpResponseMessage response)
         {
-            var apiResult = JsonConvert.DeserializeObject<ApiResult<T>>(await response.Content.ReadAsStringAsync());
+            var apiResult = new ApiResult<T>();
             apiResult.StatusCode = (int)response.StatusCode;
+            if (apiResult.StatusCode == 502)
+            {
+                // Getting html back in the content here so we set the apiResult ourselves
+                apiResult.Errors = new Error[] { new Error("Web server received an invalid response while acting as a gateway or proxy server.") };
+            }
+            else
+            {
+                apiResult = JsonConvert.DeserializeObject<ApiResult<T>>(await response.Content.ReadAsStringAsync());
+            }
+
             return apiResult;
         }
 
