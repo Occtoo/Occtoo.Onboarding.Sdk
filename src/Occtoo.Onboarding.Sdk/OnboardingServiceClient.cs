@@ -311,7 +311,6 @@ namespace Occtoo.Onboarding.Sdk
 
         public async Task<ApiResult<MediaFileDto>> UploadFileAsync(Stream content, UploadMetadata metadata, string token = null, CancellationToken? cancellationToken = null)
         {
-            CancellationToken valueOrDefaultCancelToken = cancellationToken.GetValueOrDefault();
             var fileResponse = await CreateFileAsync((int)metadata.Size, UploadMetadata.Serialize(metadata).Value, token, cancellationToken);
             if (!fileResponse.IsSuccessStatusCode)
             {
@@ -332,7 +331,7 @@ namespace Occtoo.Onboarding.Sdk
                 };
             }
 
-            var uploadResponse = await CreateObservableUpload(fileId.Value, content, 0L, valueOrDefaultCancelToken).LastOrDefaultAsync();
+            var uploadResponse = await CreateObservableUpload(fileId.Value, content, 0L, token, cancellationToken).LastOrDefaultAsync();
             if (!uploadResponse.IsCompleted)
             {
                 return new ApiResult<MediaFileDto>
@@ -342,7 +341,7 @@ namespace Occtoo.Onboarding.Sdk
                 };
             }
 
-            return await GetFileAsync(fileId.Value, token, valueOrDefaultCancelToken);
+            return await GetFileAsync(fileId.Value, token, cancellationToken);
         }
 
         public ApiResult<MediaFileDto> UploadFileIfNotExist(Stream content, UploadMetadata metadata, string token = null, CancellationToken? cancellationToken = null)
@@ -525,10 +524,14 @@ namespace Occtoo.Onboarding.Sdk
         /// <param name="memoryStream">The stream to patch with</param>
         /// <param name="cancellationToken">Own cancellation token can be provided</param>
         /// <returns></returns>
-        private async Task<HttpResponseMessage> PatchFileAsync(string fileId, int bufferLength, long currentOffset, MemoryStream memoryStream, CancellationToken? cancellationToken = null)
+        private async Task<HttpResponseMessage> PatchFileAsync(string fileId, int bufferLength, long currentOffset, MemoryStream memoryStream, string token = null, CancellationToken? cancellationToken = null)
         {
             CancellationToken valueOrDefaultCancelToken = cancellationToken.GetValueOrDefault();
-            var token = await GetTokenThroughCache(valueOrDefaultCancelToken);
+            if (string.IsNullOrEmpty(token))
+            {
+                token = await GetTokenThroughCache(valueOrDefaultCancelToken);
+            }
+
             var message = new HttpRequestMessage(new HttpMethod("patch"), $"media/uploads/files/{fileId}")
             {
                 Headers =
@@ -545,8 +548,9 @@ namespace Occtoo.Onboarding.Sdk
             return await httpClient.SendAsync(message, valueOrDefaultCancelToken);
         }
 
-        private IObservable<Progress> CreateObservableUpload(string fileId, Stream content, long offset, CancellationToken cancellationToken)
+        private IObservable<Progress> CreateObservableUpload(string fileId, Stream content, long offset, string token = null, CancellationToken? cancellationToken = null)
         {
+            CancellationToken valueOrDefaultCancelToken = cancellationToken.GetValueOrDefault();
             int chunkSize = 4194304; // 4mb
             long currentOffset = offset;
             var observable = Observable.Create<Progress>(async observer =>
@@ -554,12 +558,14 @@ namespace Occtoo.Onboarding.Sdk
                 while (currentOffset < content.Length)
                 {
                     var buffer = new byte[Math.Min(chunkSize, content.Length - currentOffset)];
-                    var bytesRead = await content.ReadAsync(buffer, 0, buffer.Length, cancellationToken);
+                    var bytesRead = await content.ReadAsync(buffer, 0, buffer.Length, valueOrDefaultCancelToken);
                     HttpResponseMessage patchResponse = await PatchFileAsync(
                         fileId,
                         buffer.Length,
                         currentOffset,
-                        new MemoryStream(buffer));
+                        new MemoryStream(buffer),
+                        token,
+                        valueOrDefaultCancelToken);
                     currentOffset = Int32.Parse(patchResponse.Headers.GetValues("Upload-Offset").First());
                     observer.OnNext(new Progress(content.Length, currentOffset, (currentOffset / content.Length) * 100,
                         content.Length == currentOffset));
