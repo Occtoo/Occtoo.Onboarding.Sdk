@@ -360,7 +360,7 @@ namespace Occtoo.Onboarding.Sdk
             var uploadResponse = await UploadFileAsync(content, metadata, token, cancellationToken);
             if (uploadResponse.StatusCode == 409) //File already exist
             {
-                var fileRequest = await GetFileFromUniqueIdAsync(metadata.UniqueIdentifier);
+                var fileRequest = await GetFileFromUniqueIdAsync(metadata.UniqueIdentifier, token, cancellationToken);
                 if (fileRequest.StatusCode != 200)
                 {
                     return new ApiResult<MediaFileDto> { StatusCode = fileRequest.StatusCode, Errors = fileRequest.Errors };
