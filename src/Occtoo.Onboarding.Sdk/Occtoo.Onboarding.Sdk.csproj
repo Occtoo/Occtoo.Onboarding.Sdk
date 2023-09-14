@@ -12,12 +12,12 @@
     <PackageIcon>icon.png</PackageIcon>
 	<PackageReadmeFile>readme.md</PackageReadmeFile>
 	<PackageLicenseExpression>MIT</PackageLicenseExpression>
-	<AssemblyVersion>3.0.0.0</AssemblyVersion>
-	<FileVersion>3.0.0.0</FileVersion>
-	<Version>3.0.0</Version>
+	<AssemblyVersion>3.0.1.0</AssemblyVersion>
+	<FileVersion>3.0.1.0</FileVersion>
+	<Version>3.0.1</Version>
 	<PackageProjectUrl>https://github.com/Occtoo/Occtoo.Onboarding.Sdk</PackageProjectUrl>
 	<RepositoryUrl>https://github.com/Occtoo/Occtoo.Onboarding.Sdk</RepositoryUrl>
-	<PackageReleaseNotes>Changing signature of media upload methods to alow for own token</PackageReleaseNotes>
+	<PackageReleaseNotes>Bugfix for token not being sent to CreateObservableUpload</PackageReleaseNotes>
   </PropertyGroup>
 
 	
