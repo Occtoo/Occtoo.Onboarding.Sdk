@@ -21,7 +21,7 @@ namespace Occtoo.Onboarding.Sdk
 {
     public class OnboardingServiceClient : IOnboardingServiceClient, IDisposable
     {
-        private static readonly HttpClient httpClient = new HttpClient()
+        private static readonly HttpClient httpClient = new HttpClient(new HttpRetryMessageHandler(new HttpClientHandler()))
         {
             BaseAddress = new Uri("https://ingest.occtoo.com")
         };
