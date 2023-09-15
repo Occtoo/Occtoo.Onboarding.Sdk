@@ -21,7 +21,7 @@ namespace Occtoo.Onboarding.Sdk
 {
     public class OnboardingServiceClient : IOnboardingServiceClient, IDisposable
     {
-        private static readonly HttpClient httpClient = new HttpClient()
+        private static readonly HttpClient httpClient = new HttpClient(new HttpRetryMessageHandler(new HttpClientHandler()))
         {
             BaseAddress = new Uri("https://ingest.occtoo.com")
         };
@@ -373,7 +373,17 @@ namespace Occtoo.Onboarding.Sdk
 
         private static async Task<ApiResult<T>> GetApiResultFromResponse<T>(HttpResponseMessage response)
         {
-            var apiResult = JsonConvert.DeserializeObject<ApiResult<T>>(await response.Content.ReadAsStringAsync());
+            var apiResult = new ApiResult<T>();
+            if (response.StatusCode == HttpStatusCode.BadGateway)
+            {
+                // Getting html back in the content here so we set the apiResult ourselves
+                apiResult.Errors = new Error[] { new Error("Web server received an invalid response while acting as a gateway or proxy server.") };
+            }
+            else
+            {
+                apiResult = JsonConvert.DeserializeObject<ApiResult<T>>(await response.Content.ReadAsStringAsync());
+            }
+
             apiResult.StatusCode = (int)response.StatusCode;
             return apiResult;
         }
