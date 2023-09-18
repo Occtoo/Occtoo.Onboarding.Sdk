@@ -12,12 +12,12 @@
     <PackageIcon>icon.png</PackageIcon>
 	<PackageReadmeFile>readme.md</PackageReadmeFile>
 	<PackageLicenseExpression>MIT</PackageLicenseExpression>
-	<AssemblyVersion>3.0.2.0</AssemblyVersion>
-	<FileVersion>3.0.2.0</FileVersion>
-	<Version>3.0.2</Version>
+	<AssemblyVersion>3.0.3.0</AssemblyVersion>
+	<FileVersion>3.0.3.0</FileVersion>
+	<Version>3.0.3</Version>
 	<PackageProjectUrl>https://github.com/Occtoo/Occtoo.Onboarding.Sdk</PackageProjectUrl>
 	<RepositoryUrl>https://github.com/Occtoo/Occtoo.Onboarding.Sdk</RepositoryUrl>
-	<PackageReleaseNotes>Bugfix for Bad Gateway errors</PackageReleaseNotes>
+	<PackageReleaseNotes>Bugfix for token and cancellation not being sent all the way</PackageReleaseNotes>
   </PropertyGroup>
 
 	
