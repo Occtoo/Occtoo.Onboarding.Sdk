@@ -1,8 +1,6 @@
 # Introduction 
 Wrapped httpclient used to create a [Nuget package](https://www.nuget.org/packages/Occtoo.Onboarding.Sdk) for calling onboarding.
 
-
-
 # Gettings started with Onboarding Service Client
 * Open your solution and add the package through [nuget](https://www.nuget.org/packages/Occtoo.Onboarding.Sdk). 
 * Create a instance of the OnboardingServiceClient and provide your Provider-Id and -Secret.
@@ -66,11 +64,10 @@ static async Task Main(string[] args)
             {
                 Key = uploadDto.Id,
                 Properties= {
-                    new DynamicProperty { Id= "url", Value = ruploadDtoPublicUrl },
+                    new DynamicProperty { Id= "url", Value = uploadDto.PublicUrl },
                     new DynamicProperty { Id= "name", Value = uploadDto.MetaData.Filename },
                     new DynamicProperty { Id= "mimeType", Value = uploadDto.MetaData.MimeType },
-                    new DynamicProperty { Id= "size", Value = uploadDto.MetaData.Size },
-                    new DynamicProperty { Id= "uniqueIdentifier", Value = uploadDto.MetaData.UniqueIdentifier }
+                    new DynamicProperty { Id= "size", Value = uploadDto.MetaData.Size.ToString() }                    
                 }
             },
         };
