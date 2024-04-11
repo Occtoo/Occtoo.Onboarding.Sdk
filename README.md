@@ -29,8 +29,8 @@ static async Task Main(string[] args)
         }
     };
 
-    var onboardingServliceClient = new OnboardingServiceClient(dataProviderId, dataProviderSecret);
-    var response = await onboardingServliceClient.StartEntityImportAsync(dataSource, enties);
+    var onboardingServiceClient = new OnboardingServiceClient(dataProviderId, dataProviderSecret);
+    var response = await onboardingServiceClient.StartEntityImportAsync(dataSource, enties);
     if(response.StatusCode == 202)
     {
         // Data was onboarded!
@@ -47,12 +47,12 @@ private readonly string dataSource = "Media";
 
 static async Task Main(string[] args)
 {
-    var onboardingServliceClient = new OnboardingServiceClient(dataProviderId, dataProviderSecret);
+    var onboardingServiceClient = new OnboardingServiceClient(dataProviderId, dataProviderSecret);
     var fileToUpload = new FileUploadFromLink(
                 "https://www.google.com/images/branding/googlelogo/1x/googlelogo_color_272x92dp.png",
                 "googlelogo_color_272x92dp.png", 
                 "googleLogo");
-    var response = await onboardingServliceClient.UploadFromLinkAsync(fileToUpload);
+    var response = await onboardingServiceClient.UploadFromLinkAsync(fileToUpload);
     if(response.StatusCode == 200)
     {
         // Media was onboarded!
@@ -72,7 +72,7 @@ static async Task Main(string[] args)
             },
         };
 
-        var response = await onboardingServliceClient.StartEntityImportAsync(dataSource, enties);
+        var response = await onboardingServiceClient.StartEntityImportAsync(dataSource, enties);
         if(response.StatusCode == 202)
         {
             // Data was onboarded!
