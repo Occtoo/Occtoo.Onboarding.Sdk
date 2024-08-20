@@ -13,6 +13,7 @@ using System.Net.Http.Headers;
 using System.Reactive.Linq;
 using System.Runtime.InteropServices.ComTypes;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Xml;
@@ -41,7 +42,7 @@ namespace Occtoo.Onboarding.Sdk
         {
             return StartEntityImportAsync(dataSource, entities, token, correlationId, cancellationToken).GetAwaiter().GetResult();
         }
-       
+
         public async Task<StartImportResponse> StartEntityImportAsync(string dataSource, IReadOnlyList<DynamicEntity> entities, string token = null, Guid? correlationId = null, CancellationToken? cancellationToken = null)
         {
             var validEntities = ValidateParametes(dataSource, entities, cancellationToken);
@@ -59,7 +60,7 @@ namespace Occtoo.Onboarding.Sdk
         {
             return GetTokenAsync(cancellationToken).GetAwaiter().GetResult();
         }
-        
+
         public async Task<string> GetTokenAsync(CancellationToken? cancellationToken = null)
         {
             CancellationToken valueOrDefaultCancelToken = cancellationToken.GetValueOrDefault();
@@ -94,7 +95,7 @@ namespace Occtoo.Onboarding.Sdk
             {
                 token = await GetTokenThroughCache(valueOrDefaultCancelToken);
             }
-            
+
             var message = new HttpRequestMessage(HttpMethod.Get, $"media/files/{fileId}")
             {
                 Headers =
@@ -280,7 +281,7 @@ namespace Occtoo.Onboarding.Sdk
             {
                 token = await GetTokenThroughCache(valueOrDefaultCancelToken);
             }
-            
+
             var message = new HttpRequestMessage(HttpMethod.Delete, $"media/files/{fileId}")
             {
                 Headers =
@@ -345,7 +346,7 @@ namespace Occtoo.Onboarding.Sdk
         }
 
         public ApiResult<MediaFileDto> UploadFileIfNotExist(Stream content, UploadMetadata metadata, string token = null, CancellationToken? cancellationToken = null)
-        { 
+        {
             return UploadFileIfNotExistAsync(content, metadata, token, cancellationToken).GetAwaiter().GetResult();
         }
 
@@ -456,6 +457,9 @@ namespace Occtoo.Onboarding.Sdk
 
         private static IEnumerable<DynamicEntity> ValidatePayload(IEnumerable<DynamicEntity> entities)
         {
+            Regex InvalidCharacters = new Regex(@"^[a-zA-Z0-9_-]{1,256}$", RegexOptions.Compiled);
+            Regex InvalidCharactersLang = new Regex(@"^[a-zA-Z0-9_-]{1,10}$", RegexOptions.Compiled);
+
             var validEntitites = entities.Where(e => e != null).Select(e =>
             {
                 if (e.Properties == null)
@@ -471,6 +475,11 @@ namespace Occtoo.Onboarding.Sdk
                 throw new ArgumentException("Entities must not have null or empty Key identifiers.");
             }
 
+            if (validEntitites.Any(e => !InvalidCharacters.IsMatch(e.Key)))
+            {
+                throw new ArgumentException("Entities must have Key identifiers containing only letters, digits, underscores, or hyphens and is at most 256 characters long .");
+            }
+
             var groupedEntites = validEntitites.GroupBy(e => e.Key).Where(k => k.Count() > 1);
             if (groupedEntites.Any())
             {
@@ -481,6 +490,21 @@ namespace Occtoo.Onboarding.Sdk
             if (groupedEntitiesOnProperties.Any())
             {
                 throw new ArgumentException($"Entities: {string.Join(",", groupedEntitiesOnProperties.Select(e => e.Key))} contain duplicated properties");
+            }
+
+            foreach (var entity in validEntitites)
+            {
+                foreach (var property in entity.Properties)
+                {
+                    if (!InvalidCharacters.IsMatch(property.Id))
+                    {
+                        throw new ArgumentException($"{property.Id} - Entities must have Property identifiers containing only letters, digits, underscores, or hyphens and is at most 256 characters long .");
+                    }
+                    if (!InvalidCharactersLang.IsMatch(property.Language))
+                    {
+                        throw new ArgumentException($"{property.Language} - Entities must have Property Language containing only letters, digits, underscores, or hyphens and is at most 10 characters long .");
+                    }
+                }
             }
 
             return validEntitites;
@@ -509,7 +533,7 @@ namespace Occtoo.Onboarding.Sdk
             {
                 token = await GetTokenThroughCache(valueOrDefaultCancelToken);
             }
-                
+
             var message = new HttpRequestMessage(HttpMethod.Post, "media/uploads/files")
             {
                 Headers =
