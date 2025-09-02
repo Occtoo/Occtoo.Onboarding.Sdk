@@ -17,9 +17,8 @@
 	<Version>3.0.6</Version>
 	<PackageProjectUrl>https://github.com/Occtoo/Occtoo.Onboarding.Sdk</PackageProjectUrl>
 	<RepositoryUrl>https://github.com/Occtoo/Occtoo.Onboarding.Sdk</RepositoryUrl>
-	<PackageReleaseNotes>No Validation of Optional language property</PackageReleaseNotes>
+	<PackageReleaseNotes>Empty string validation of language property added</PackageReleaseNotes>
   </PropertyGroup>
-
 	
   <ItemGroup>
     <PackageReference Include="CSharpFunctionalExtensions" Version="2.38.1" />
