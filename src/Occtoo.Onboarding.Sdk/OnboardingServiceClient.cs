@@ -300,6 +300,11 @@ namespace Occtoo.Onboarding.Sdk
             else
             {
                 var apiResult = JsonConvert.DeserializeObject<ApiResult>(await response.Content.ReadAsStringAsync());
+                if(apiResult == null)
+                {
+                    apiResult = new ApiResult();
+                }
+
                 apiResult.StatusCode = (int)response.StatusCode;
                 return apiResult;
             }
