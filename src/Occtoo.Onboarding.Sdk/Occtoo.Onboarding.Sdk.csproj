@@ -12,12 +12,12 @@
     <PackageIcon>icon.png</PackageIcon>
 	<PackageReadmeFile>readme.md</PackageReadmeFile>
 	<PackageLicenseExpression>MIT</PackageLicenseExpression>
-	<AssemblyVersion>3.0.6.0</AssemblyVersion>
-	<FileVersion>3.0.6.0</FileVersion>
-	<Version>3.0.6</Version>
+	<AssemblyVersion>3.0.7.0</AssemblyVersion>
+	<FileVersion>3.0.7.0</FileVersion>
+	<Version>3.0.7</Version>
 	<PackageProjectUrl>https://github.com/Occtoo/Occtoo.Onboarding.Sdk</PackageProjectUrl>
 	<RepositoryUrl>https://github.com/Occtoo/Occtoo.Onboarding.Sdk</RepositoryUrl>
-	<PackageReleaseNotes>Empty string validation of language property added</PackageReleaseNotes>
+	<PackageReleaseNotes>Fixing issue with polly and netstandard2.0 and net8.0</PackageReleaseNotes>
   </PropertyGroup>
 	
   <ItemGroup>
