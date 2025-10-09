@@ -12,30 +12,6 @@ namespace Occtoo.Onboarding.Sdk
         private static readonly Random RandomJitter = new Random();
         public HttpRetryMessageHandler(HttpMessageHandler handler) : base(handler) { }
 
-#if NET8_0_OR_GREATER
-
-        protected override Task<HttpResponseMessage> SendAsync(
-        HttpRequestMessage request,
-        CancellationToken cancellationToken)
-        {
-            var policy = GetRetryPolicy();
-
-            return policy.ExecuteAsync(() => base.SendAsync(request, cancellationToken));
-        }
-
-        private static IAsyncPolicy<HttpResponseMessage> GetRetryPolicy()
-        {
-            return HttpPolicyExtensions
-                .HandleTransientHttpError() // Handles HttpRequestException, 5xx and 408 responses
-                .OrResult(msg => msg.StatusCode != System.Net.HttpStatusCode.OK)
-                .OrResult(msg => msg.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
-                .WaitAndRetryAsync(
-                    6,
-                    retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt))
-                                  + TimeSpan.FromMilliseconds(RandomJitter.Next(0, 100))
-                );
-        }
-#else
          protected override Task<HttpResponseMessage> SendAsync(
                    HttpRequestMessage request,
                    CancellationToken cancellationToken) =>
@@ -48,6 +24,5 @@ namespace Occtoo.Onboarding.Sdk
                            retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt))
                              + TimeSpan.FromMilliseconds(RandomJitter.Next(0, 100)))
                        .ExecuteAsync(() => base.SendAsync(request, cancellationToken));
-#endif
     }
 }
