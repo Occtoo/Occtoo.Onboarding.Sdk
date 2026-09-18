@@ -22,9 +22,19 @@ namespace Occtoo.Onboarding.Sdk
 {
     public class OnboardingServiceClient : IOnboardingServiceClient, IDisposable
     {
+        // HttpClient.Timeout covers the whole SendAsync call, and because HttpRetryMessageHandler sits
+        // inside the pipeline that budget is shared with every retry it performs. At the .NET default of
+        // 100 seconds a slow request plus the handler's backoff waits exceeds the budget, and the caller
+        // gets a bare "A task was canceled." with the originating status code no longer recoverable.
+        // Media uploads in particular send the file as a series of 4 MB chunks over a connection pool
+        // that callers on .NET Framework cap at two per host by default, so queueing alone can outlast
+        // 100 seconds. Allow a request the room to finish rather than reporting it as a cancellation.
+        internal static readonly TimeSpan RequestTimeout = TimeSpan.FromMinutes(10);
+
         private static readonly HttpClient httpClient = new HttpClient(new HttpRetryMessageHandler(new HttpClientHandler()))
         {
-            BaseAddress = new Uri("https://ingest.occtoo.com")
+            BaseAddress = new Uri("https://ingest.occtoo.com"),
+            Timeout = RequestTimeout
         };
         private readonly string cachekey = "token";
         private readonly string dataProviderId;
