@@ -40,6 +40,7 @@ namespace Occtoo.Onboarding.Sdk
         private readonly string dataProviderId;
         private readonly string dataProviderSecret;
         private readonly IMemoryCache cache;
+        private bool disposed;
 
         public OnboardingServiceClient(string dataProviderId, string dataProviderSecret)
         {
@@ -632,6 +633,20 @@ namespace Occtoo.Onboarding.Sdk
         }
         #endregion
 
-        public void Dispose() => httpClient?.Dispose();
+        // httpClient is static and shared by every instance in the process, so it is deliberately not
+        // disposed here. Disposing it would tear down the connection pool for all other instances, and
+        // on .NET Framework HttpClient.Dispose also cancels every request still in flight - which callers
+        // would see as an unexplained "A task was canceled." on work that had nothing to do with the
+        // instance being disposed. The token cache is the only resource an instance actually owns.
+        public void Dispose()
+        {
+            if (disposed)
+            {
+                return;
+            }
+
+            disposed = true;
+            cache?.Dispose();
+        }
     }
 }
