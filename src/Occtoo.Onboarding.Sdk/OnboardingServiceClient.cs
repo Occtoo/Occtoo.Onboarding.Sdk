@@ -23,15 +23,9 @@ namespace Occtoo.Onboarding.Sdk
 {
     public class OnboardingServiceClient : IOnboardingServiceClient, IDisposable
     {
-        // The deadline for one whole request, retries included. HttpClient.Timeout covers the entire
-        // SendAsync call, and because HttpRetryMessageHandler sits inside the pipeline that budget is
-        // shared with every retry it performs. At the .NET default of 100 seconds a slow request plus
-        // the handler's backoff waits exceeds the budget, and the caller gets a bare "A task was
-        // canceled." with the originating status code no longer recoverable. Media uploads are the most
-        // exposed: a file is sent as a series of 4 MB chunks over a connection pool that callers on
-        // .NET Framework cap at two per host by default, so queueing alone can outlast 100 seconds.
-        // Callers who need a different deadline can pass one to the constructor.
-        public static readonly TimeSpan DefaultRequestTimeout = TimeSpan.FromMinutes(5);
+        // Used when the caller does not ask for a particular deadline. Its Timeout is left at whatever
+        // HttpClient defaults to, which keeps the SDK's long-standing behaviour for existing callers.
+        private static readonly HttpClient defaultHttpClient = CreateHttpClient(null);
 
         // HttpClient.Timeout is fixed once an instance has sent its first request, so a caller-supplied
         // timeout needs a client of its own. Giving every OnboardingServiceClient its own client would
@@ -48,23 +42,43 @@ namespace Occtoo.Onboarding.Sdk
         private bool disposed;
 
         /// <summary>
-        /// Creates a client whose requests use <see cref="DefaultRequestTimeout"/>.
+        /// Creates a client whose requests use HttpClient's own default timeout of 100 seconds.
         /// </summary>
+        /// <remarks>
+        /// That deadline covers a whole request, and because the retry handler sits inside the pipeline it is
+        /// shared with every retry the client makes. A request that outlasts it fails with a bare "A task was
+        /// canceled." from which the originating status code cannot be recovered. Uploading large media, or
+        /// uploading concurrently from .NET Framework where ServicePointManager allows only two connections
+        /// per host, can outlast 100 seconds - prefer the overload taking a timeout for that kind of work.
+        /// </remarks>
         public OnboardingServiceClient(string dataProviderId, string dataProviderSecret)
-            : this(dataProviderId, dataProviderSecret, DefaultRequestTimeout)
+            : this(dataProviderId, dataProviderSecret, defaultHttpClient)
         {
         }
 
         /// <summary>
-        /// Creates a client whose requests use <paramref name="requestTimeout"/> in place of
-        /// <see cref="DefaultRequestTimeout"/>. The deadline covers one whole request including any
-        /// retries the client makes internally, so leave room for those when choosing a value. Pass
-        /// <see cref="Timeout.InfiniteTimeSpan"/> to rely on cancellation tokens alone.
+        /// Creates a client whose requests use <paramref name="requestTimeout"/> rather than HttpClient's
+        /// default. The deadline covers one whole request including any retries the client makes internally,
+        /// so leave room for those when choosing a value. Pass <see cref="Timeout.InfiniteTimeSpan"/> to rely
+        /// on cancellation tokens alone.
         /// </summary>
         /// <exception cref="ArgumentOutOfRangeException">
         /// <paramref name="requestTimeout"/> is zero or negative and is not <see cref="Timeout.InfiniteTimeSpan"/>.
         /// </exception>
         public OnboardingServiceClient(string dataProviderId, string dataProviderSecret, TimeSpan requestTimeout)
+            : this(dataProviderId, dataProviderSecret, ClientFor(requestTimeout))
+        {
+        }
+
+        private OnboardingServiceClient(string dataProviderId, string dataProviderSecret, HttpClient httpClient)
+        {
+            this.dataProviderId = dataProviderId;
+            this.dataProviderSecret = dataProviderSecret;
+            this.httpClient = httpClient;
+            cache = new MemoryCache(new MemoryCacheOptions());
+        }
+
+        private static HttpClient ClientFor(TimeSpan requestTimeout)
         {
             if (requestTimeout <= TimeSpan.Zero && requestTimeout != Timeout.InfiniteTimeSpan)
             {
@@ -72,19 +86,22 @@ namespace Occtoo.Onboarding.Sdk
                     "Request timeout must be positive, or Timeout.InfiniteTimeSpan for no timeout.");
             }
 
-            this.dataProviderId = dataProviderId;
-            this.dataProviderSecret = dataProviderSecret;
-            cache = new MemoryCache(new MemoryCacheOptions());
-            httpClient = httpClients.GetOrAdd(requestTimeout, CreateHttpClient);
+            return httpClients.GetOrAdd(requestTimeout, timeout => CreateHttpClient(timeout));
         }
 
-        private static HttpClient CreateHttpClient(TimeSpan requestTimeout)
+        private static HttpClient CreateHttpClient(TimeSpan? requestTimeout)
         {
-            return new HttpClient(new HttpRetryMessageHandler(new HttpClientHandler()))
+            var client = new HttpClient(new HttpRetryMessageHandler(new HttpClientHandler()))
             {
-                BaseAddress = new Uri("https://ingest.occtoo.com"),
-                Timeout = requestTimeout
+                BaseAddress = new Uri("https://ingest.occtoo.com")
             };
+
+            if (requestTimeout.HasValue)
+            {
+                client.Timeout = requestTimeout.Value;
+            }
+
+            return client;
         }
 
         public StartImportResponse StartEntityImport(string dataSource, IReadOnlyList<DynamicEntity> entities, string token = null, Guid? correlationId = null, CancellationToken? cancellationToken = null)

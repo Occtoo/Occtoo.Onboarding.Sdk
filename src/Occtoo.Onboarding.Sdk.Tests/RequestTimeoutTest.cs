@@ -11,17 +11,22 @@ namespace Occtoo.Onboarding.Sdk.Tests
         private const string AnySecret = "secret";
 
         [Fact]
-        public void DefaultRequestTimeoutIsFiveMinutes()
+        public void AClientGivenNoTimeoutKeepsHttpClientsOwnDefault()
         {
-            Assert.Equal(TimeSpan.FromMinutes(5), OnboardingServiceClient.DefaultRequestTimeout);
+            // The SDK deliberately imposes no deadline of its own: a caller who does not ask for one gets
+            // HttpClient's 100 seconds, exactly as before the timeout overload existed.
+            using var client = new OnboardingServiceClient(AnyId, AnySecret);
+
+            Assert.Equal(new HttpClient().Timeout, HttpClientOf(client).Timeout);
         }
 
         [Fact]
-        public void ClientUsesTheDefaultTimeoutWhenNoneIsGiven()
+        public void ClientsGivenNoTimeoutShareOneHttpClient()
         {
-            using var client = new OnboardingServiceClient(AnyId, AnySecret);
+            using var first = new OnboardingServiceClient(AnyId, AnySecret);
+            using var second = new OnboardingServiceClient("other", "other");
 
-            Assert.Equal(OnboardingServiceClient.DefaultRequestTimeout, HttpClientOf(client).Timeout);
+            Assert.Same(HttpClientOf(first), HttpClientOf(second));
         }
 
         [Fact]
@@ -89,7 +94,7 @@ namespace Occtoo.Onboarding.Sdk.Tests
         [Fact]
         public void DisposeIsIdempotent()
         {
-            var client = new OnboardingServiceClient(AnyId, AnySecret);
+            var client = new OnboardingServiceClient(AnyId, AnySecret, TimeSpan.FromMinutes(13));
 
             client.Dispose();
 

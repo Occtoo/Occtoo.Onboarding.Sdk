@@ -42,11 +42,11 @@ static async Task Main(string[] args)
 ```
 
 ## Request timeout
-Every call has a deadline covering the whole request, retries included. It defaults to
-`OnboardingServiceClient.DefaultRequestTimeout`, which is 5 minutes - generous enough for a large media
-upload over a constrained connection pool.
+Every call has a deadline covering the whole request, retries included. By default that is whatever
+[`HttpClient`](https://learn.microsoft.com/en-us/dotnet/api/system.net.http.httpclient.timeout) uses -
+100 seconds - and the SDK does not override it.
 
-Pass your own if that does not suit your workload:
+That is not much for a large media upload, so set your own:
 
 ```cs
 var onboardingServliceClient = new OnboardingServiceClient(
@@ -59,6 +59,9 @@ Clients asking for the same timeout share one underlying `HttpClient`, so creati
 Pass `Timeout.InfiniteTimeSpan` to drop the deadline altogether and control it through the
 `cancellationToken` parameter instead.
 
+A request that outlasts its deadline fails with `A task was canceled.`, and the status code that caused
+it cannot be recovered from that - so if you see it, suspect the timeout first.
+
 > **Uploading from .NET Framework?** `ServicePointManager` caps outbound connections at two per host by
 > default, and time spent waiting for a free connection counts against the deadline. Raise
 > `ServicePointManager.DefaultConnectionLimit` if you upload files concurrently.
@@ -67,8 +70,8 @@ Pass `Timeout.InfiniteTimeSpan` to drop the deadline altogether and control it t
 
 ## Release Notes 3.1.0
 Fixes uploads failing with "A task was canceled.":
-* The request timeout now defaults to 5 minutes rather than the .NET default of 100 seconds, and can be
-  set per client through the new constructor overload.
+* The request timeout can now be set per client through a new constructor overload. Callers that do not
+  set one keep HttpClient's default of 100 seconds, unchanged.
 * Retries are limited to transient failures - connection errors, 5xx, 408 and 429 - instead of every
   non-success status, so a 400 or a 409 comes back on the first attempt with its status intact.
 * Each retry sends its own copy of the request. A retry previously reused a request whose content stream
