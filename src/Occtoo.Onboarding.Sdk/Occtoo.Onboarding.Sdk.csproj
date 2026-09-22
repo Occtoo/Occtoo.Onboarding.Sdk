@@ -12,9 +12,9 @@
     <PackageIcon>icon.png</PackageIcon>
 	<PackageReadmeFile>readme.md</PackageReadmeFile>
 	<PackageLicenseExpression>MIT</PackageLicenseExpression>
-	<AssemblyVersion>3.0.7.0</AssemblyVersion>
-	<FileVersion>3.0.7.0</FileVersion>
-	<Version>3.0.7</Version>
+	<AssemblyVersion>3.1.0.0</AssemblyVersion>
+	<FileVersion>3.1.0.0</FileVersion>
+	<Version>3.1.0</Version>
 	<PackageProjectUrl>https://github.com/Occtoo/Occtoo.Onboarding.Sdk</PackageProjectUrl>
 	<RepositoryUrl>https://github.com/Occtoo/Occtoo.Onboarding.Sdk</RepositoryUrl>
 	<PackageReleaseNotes>Fixes uploads failing with "A task was canceled." - the request timeout is now 5 minutes and configurable, retries are limited to transient failures, and Dispose no longer tears down the shared HttpClient.</PackageReleaseNotes>

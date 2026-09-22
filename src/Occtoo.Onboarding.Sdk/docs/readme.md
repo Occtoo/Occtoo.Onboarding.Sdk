@@ -65,5 +65,15 @@ Pass `Timeout.InfiniteTimeSpan` to drop the deadline altogether and control it t
 
 [Code repository on github](https://github.com/Occtoo/Occtoo.Onboarding.Sdk)
 
+## Release Notes 3.1.0
+Fixes uploads failing with "A task was canceled.":
+* The request timeout now defaults to 5 minutes rather than the .NET default of 100 seconds, and can be
+  set per client through the new constructor overload.
+* Retries are limited to transient failures - connection errors, 5xx, 408 and 429 - instead of every
+  non-success status, so a 400 or a 409 comes back on the first attempt with its status intact.
+* Each retry sends its own copy of the request. A retry previously reused a request whose content stream
+  the first attempt had already consumed, which resent an empty body.
+* Dispose no longer disposes the HttpClient shared by every client in the process.
+
 ## Release Notes 2.0.2
 Bugfix for GetFileFromUniqueIdAsync to return 404 instead of 202 when no file found.
