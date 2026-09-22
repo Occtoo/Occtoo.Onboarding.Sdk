@@ -41,6 +41,28 @@ static async Task Main(string[] args)
 }
 ```
 
+## Request timeout
+Every call has a deadline covering the whole request, retries included. It defaults to
+`OnboardingServiceClient.DefaultRequestTimeout`, which is 5 minutes - generous enough for a large media
+upload over a constrained connection pool.
+
+Pass your own if that does not suit your workload:
+
+```cs
+var onboardingServliceClient = new OnboardingServiceClient(
+    dataProviderId,
+    dataProviderSecret,
+    TimeSpan.FromMinutes(30));
+```
+
+Clients asking for the same timeout share one underlying `HttpClient`, so creating several is cheap.
+Pass `Timeout.InfiniteTimeSpan` to drop the deadline altogether and control it through the
+`cancellationToken` parameter instead.
+
+> **Uploading from .NET Framework?** `ServicePointManager` caps outbound connections at two per host by
+> default, and time spent waiting for a free connection counts against the deadline. Raise
+> `ServicePointManager.DefaultConnectionLimit` if you upload files concurrently.
+
 [Code repository on github](https://github.com/Occtoo/Occtoo.Onboarding.Sdk)
 
 ## Release Notes 2.0.2

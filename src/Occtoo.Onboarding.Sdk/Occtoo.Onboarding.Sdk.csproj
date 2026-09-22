@@ -17,7 +17,7 @@
 	<Version>3.0.7</Version>
 	<PackageProjectUrl>https://github.com/Occtoo/Occtoo.Onboarding.Sdk</PackageProjectUrl>
 	<RepositoryUrl>https://github.com/Occtoo/Occtoo.Onboarding.Sdk</RepositoryUrl>
-	<PackageReleaseNotes>Fixing issue with polly and netstandard2.0 and net8.0</PackageReleaseNotes>
+	<PackageReleaseNotes>Fixes uploads failing with "A task was canceled." - the request timeout is now 5 minutes and configurable, retries are limited to transient failures, and Dispose no longer tears down the shared HttpClient.</PackageReleaseNotes>
   </PropertyGroup>
 	
   <ItemGroup>
