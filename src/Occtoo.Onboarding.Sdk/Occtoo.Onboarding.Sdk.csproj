@@ -17,7 +17,7 @@
 	<Version>3.1.0</Version>
 	<PackageProjectUrl>https://github.com/Occtoo/Occtoo.Onboarding.Sdk</PackageProjectUrl>
 	<RepositoryUrl>https://github.com/Occtoo/Occtoo.Onboarding.Sdk</RepositoryUrl>
-	<PackageReleaseNotes>Fixes uploads failing with "A task was canceled." - the request timeout is now settable per client, retries are limited to transient failures, and Dispose no longer tears down the shared HttpClient.</PackageReleaseNotes>
+	<PackageReleaseNotes>Fixes uploads failing with "A task was canceled." - the request timeout is now settable per client and per media upload, retries are limited to transient failures, and Dispose no longer tears down the shared HttpClient.</PackageReleaseNotes>
   </PropertyGroup>
 	
   <ItemGroup>

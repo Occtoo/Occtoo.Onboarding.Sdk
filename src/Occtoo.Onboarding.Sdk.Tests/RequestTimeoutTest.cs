@@ -1,3 +1,4 @@
+using Occtoo.Onboarding.Sdk.Models;
 using System.Net.Http;
 using System.Reflection;
 
@@ -100,6 +101,47 @@ namespace Occtoo.Onboarding.Sdk.Tests
 
             Assert.Null(Record.Exception(() => client.Dispose()));
         }
+
+        [Theory]
+        [InlineData(0)]
+        [InlineData(-1)]
+        public async Task AnUploadTimeoutThatIsNotPositiveIsRejected(int seconds)
+        {
+            // Rejected before anything is sent, so a bad argument never costs a round trip.
+            using var client = new OnboardingServiceClient(AnyId, AnySecret);
+
+            await Assert.ThrowsAsync<ArgumentOutOfRangeException>(
+                () => client.UploadFileAsync(AnyContent(), AnyMetadata(), uploadTimeout: TimeSpan.FromSeconds(seconds)));
+        }
+
+        [Theory]
+        [InlineData(0)]
+        [InlineData(-1)]
+        public void TheSynchronousUploadRejectsTheSameTimeouts(int seconds)
+        {
+            // The sync wrapper unwraps the task, so callers see the argument error rather than an
+            // AggregateException wrapping it.
+            using var client = new OnboardingServiceClient(AnyId, AnySecret);
+
+            Assert.Throws<ArgumentOutOfRangeException>(
+                () => client.UploadFile(AnyContent(), AnyMetadata(), uploadTimeout: TimeSpan.FromSeconds(seconds)));
+        }
+
+        [Fact]
+        public void AnUploadDeadlineIsEnforcedOnAClientThatHasNoTimeoutOfItsOwn()
+        {
+            // The per-call deadline can only be the effective one if the client it runs on does not impose
+            // a shorter one. Nothing public exposes that client, so reach for the pooled instance directly.
+            var untimed = typeof(OnboardingServiceClient)
+                .GetProperty("UntimedClient", BindingFlags.Static | BindingFlags.NonPublic);
+
+            Assert.NotNull(untimed);
+            Assert.Equal(Timeout.InfiniteTimeSpan, ((HttpClient)untimed!.GetValue(null)!).Timeout);
+        }
+
+        private static MemoryStream AnyContent() => new MemoryStream(new byte[] { 1, 2, 3 });
+
+        private static UploadMetadata AnyMetadata() => new UploadMetadata("any.png", "image/png", 3, "any-unique-id");
 
         private static HttpClient HttpClientOf(OnboardingServiceClient client)
         {
