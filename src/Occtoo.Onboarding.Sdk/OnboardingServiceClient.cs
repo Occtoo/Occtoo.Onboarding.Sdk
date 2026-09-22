@@ -4,6 +4,7 @@ using Newtonsoft.Json;
 using Occtoo.Onboarding.Sdk.Models;
 using Polly;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -22,31 +23,68 @@ namespace Occtoo.Onboarding.Sdk
 {
     public class OnboardingServiceClient : IOnboardingServiceClient, IDisposable
     {
-        // HttpClient.Timeout covers the whole SendAsync call, and because HttpRetryMessageHandler sits
-        // inside the pipeline that budget is shared with every retry it performs. At the .NET default of
-        // 100 seconds a slow request plus the handler's backoff waits exceeds the budget, and the caller
-        // gets a bare "A task was canceled." with the originating status code no longer recoverable.
-        // Media uploads in particular send the file as a series of 4 MB chunks over a connection pool
-        // that callers on .NET Framework cap at two per host by default, so queueing alone can outlast
-        // 100 seconds. Allow a request the room to finish rather than reporting it as a cancellation.
-        internal static readonly TimeSpan RequestTimeout = TimeSpan.FromMinutes(10);
+        // The deadline for one whole request, retries included. HttpClient.Timeout covers the entire
+        // SendAsync call, and because HttpRetryMessageHandler sits inside the pipeline that budget is
+        // shared with every retry it performs. At the .NET default of 100 seconds a slow request plus
+        // the handler's backoff waits exceeds the budget, and the caller gets a bare "A task was
+        // canceled." with the originating status code no longer recoverable. Media uploads are the most
+        // exposed: a file is sent as a series of 4 MB chunks over a connection pool that callers on
+        // .NET Framework cap at two per host by default, so queueing alone can outlast 100 seconds.
+        // Callers who need a different deadline can pass one to the constructor.
+        public static readonly TimeSpan DefaultRequestTimeout = TimeSpan.FromMinutes(5);
 
-        private static readonly HttpClient httpClient = new HttpClient(new HttpRetryMessageHandler(new HttpClientHandler()))
-        {
-            BaseAddress = new Uri("https://ingest.occtoo.com"),
-            Timeout = RequestTimeout
-        };
+        // HttpClient.Timeout is fixed once an instance has sent its first request, so a caller-supplied
+        // timeout needs a client of its own. Giving every OnboardingServiceClient its own client would
+        // exhaust sockets, so clients are pooled by the one thing that distinguishes them and shared by
+        // every instance asking for the same deadline.
+        private static readonly ConcurrentDictionary<TimeSpan, HttpClient> httpClients =
+            new ConcurrentDictionary<TimeSpan, HttpClient>();
+
+        private readonly HttpClient httpClient;
         private readonly string cachekey = "token";
         private readonly string dataProviderId;
         private readonly string dataProviderSecret;
         private readonly IMemoryCache cache;
         private bool disposed;
 
+        /// <summary>
+        /// Creates a client whose requests use <see cref="DefaultRequestTimeout"/>.
+        /// </summary>
         public OnboardingServiceClient(string dataProviderId, string dataProviderSecret)
+            : this(dataProviderId, dataProviderSecret, DefaultRequestTimeout)
         {
+        }
+
+        /// <summary>
+        /// Creates a client whose requests use <paramref name="requestTimeout"/> in place of
+        /// <see cref="DefaultRequestTimeout"/>. The deadline covers one whole request including any
+        /// retries the client makes internally, so leave room for those when choosing a value. Pass
+        /// <see cref="Timeout.InfiniteTimeSpan"/> to rely on cancellation tokens alone.
+        /// </summary>
+        /// <exception cref="ArgumentOutOfRangeException">
+        /// <paramref name="requestTimeout"/> is zero or negative and is not <see cref="Timeout.InfiniteTimeSpan"/>.
+        /// </exception>
+        public OnboardingServiceClient(string dataProviderId, string dataProviderSecret, TimeSpan requestTimeout)
+        {
+            if (requestTimeout <= TimeSpan.Zero && requestTimeout != Timeout.InfiniteTimeSpan)
+            {
+                throw new ArgumentOutOfRangeException(nameof(requestTimeout), requestTimeout,
+                    "Request timeout must be positive, or Timeout.InfiniteTimeSpan for no timeout.");
+            }
+
             this.dataProviderId = dataProviderId;
             this.dataProviderSecret = dataProviderSecret;
             cache = new MemoryCache(new MemoryCacheOptions());
+            httpClient = httpClients.GetOrAdd(requestTimeout, CreateHttpClient);
+        }
+
+        private static HttpClient CreateHttpClient(TimeSpan requestTimeout)
+        {
+            return new HttpClient(new HttpRetryMessageHandler(new HttpClientHandler()))
+            {
+                BaseAddress = new Uri("https://ingest.occtoo.com"),
+                Timeout = requestTimeout
+            };
         }
 
         public StartImportResponse StartEntityImport(string dataSource, IReadOnlyList<DynamicEntity> entities, string token = null, Guid? correlationId = null, CancellationToken? cancellationToken = null)
@@ -404,7 +442,7 @@ namespace Occtoo.Onboarding.Sdk
             return apiResult;
         }
 
-        private static async Task<StartImportResponse> EntityImportAsync(string dataSource, IEnumerable<DynamicEntity> validEntities, string token, CancellationToken cancellationToken, Guid? correlationId = null)
+        private async Task<StartImportResponse> EntityImportAsync(string dataSource, IEnumerable<DynamicEntity> validEntities, string token, CancellationToken cancellationToken, Guid? correlationId = null)
         {
             string requestUri = $"import/{dataSource}";
             if (correlationId.HasValue && correlationId != default(Guid))
@@ -633,11 +671,12 @@ namespace Occtoo.Onboarding.Sdk
         }
         #endregion
 
-        // httpClient is static and shared by every instance in the process, so it is deliberately not
-        // disposed here. Disposing it would tear down the connection pool for all other instances, and
-        // on .NET Framework HttpClient.Dispose also cancels every request still in flight - which callers
-        // would see as an unexplained "A task was canceled." on work that had nothing to do with the
-        // instance being disposed. The token cache is the only resource an instance actually owns.
+        // httpClient comes from a pool shared by every instance in the process, so it is deliberately not
+        // disposed here. Disposing it would tear down the connection pool for every other instance handed
+        // the same client, and on .NET Framework HttpClient.Dispose also cancels every request still in
+        // flight - which those callers would see as an unexplained "A task was canceled." on work that had
+        // nothing to do with the instance being disposed. The token cache is the only resource an instance
+        // actually owns.
         public void Dispose()
         {
             if (disposed)
