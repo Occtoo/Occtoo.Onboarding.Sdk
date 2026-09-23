@@ -17,8 +17,8 @@ namespace Occtoo.Onboarding.Sdk
         Task<ApiResult<PartialSuccessResponse<string, MediaFileDto, Error>>> GetFilesBatchAsync(List<string> identifiers, string token = null, CancellationToken? cancellationToken = null);
         Task<ApiResult<MediaFileDto>> UploadFromLinkAsync(FileUploadFromLink link, string token = null, CancellationToken? cancellationToken = null);
         Task<ApiResult<PartialSuccessResponse<string, UploadDto, Error>>> UploadFromLinksAsync(List<FileUploadFromLink> links, string token = null, CancellationToken? cancellationToken = null);
-        Task<ApiResult<MediaFileDto>> UploadFileAsync(Stream content, UploadMetadata metadata, string token = null, CancellationToken? cancellationToken = null);
-        Task<ApiResult<MediaFileDto>> UploadFileIfNotExistAsync(Stream content, UploadMetadata metadata, string token = null, CancellationToken? cancellationToken = null);
+        Task<ApiResult<MediaFileDto>> UploadFileAsync(Stream content, UploadMetadata metadata, string token = null, CancellationToken? cancellationToken = null, TimeSpan? uploadTimeout = null);
+        Task<ApiResult<MediaFileDto>> UploadFileIfNotExistAsync(Stream content, UploadMetadata metadata, string token = null, CancellationToken? cancellationToken = null, TimeSpan? uploadTimeout = null);
         Task<ApiResult<UploadDto>> GetUploadStatusAsync(string uploadId, string token = null, CancellationToken? cancellationToken = null);
         Task<ApiResult> DeleteFileAsync(string fileId, string token = null, CancellationToken? cancellationToken = null);
 
@@ -30,8 +30,8 @@ namespace Occtoo.Onboarding.Sdk
         ApiResult<PartialSuccessResponse<string, MediaFileDto, Error>> GetFilesBatch(List<string> identifiers, string token = null, CancellationToken? cancellationToken = null);
         ApiResult<MediaFileDto> UploadFromLink(FileUploadFromLink link, string token = null, CancellationToken? cancellationToken = null);
         ApiResult<PartialSuccessResponse<string, UploadDto, Error>> UploadFromLinks(List<FileUploadFromLink> links, string token = null, CancellationToken? cancellationToken = null);
-        ApiResult<MediaFileDto> UploadFile(Stream content, UploadMetadata metadata, string token = null, CancellationToken? cancellationToken = null);
-        ApiResult<MediaFileDto> UploadFileIfNotExist(Stream content, UploadMetadata metadata, string token = null, CancellationToken? cancellationToken = null);
+        ApiResult<MediaFileDto> UploadFile(Stream content, UploadMetadata metadata, string token = null, CancellationToken? cancellationToken = null, TimeSpan? uploadTimeout = null);
+        ApiResult<MediaFileDto> UploadFileIfNotExist(Stream content, UploadMetadata metadata, string token = null, CancellationToken? cancellationToken = null, TimeSpan? uploadTimeout = null);
         ApiResult<UploadDto> GetUploadStatus(string uploadId, string token = null, CancellationToken? cancellationToken = null);
         ApiResult DeleteFile(string fileId, string token = null, CancellationToken? cancellationToken = null);
     }

@@ -4,6 +4,7 @@ using Newtonsoft.Json;
 using Occtoo.Onboarding.Sdk.Models;
 using Polly;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -22,20 +23,95 @@ namespace Occtoo.Onboarding.Sdk
 {
     public class OnboardingServiceClient : IOnboardingServiceClient, IDisposable
     {
-        private static readonly HttpClient httpClient = new HttpClient(new HttpRetryMessageHandler(new HttpClientHandler()))
-        {
-            BaseAddress = new Uri("https://ingest.occtoo.com")
-        };
+        // Used when the caller does not ask for a particular deadline. Its Timeout is left at whatever
+        // HttpClient defaults to, which keeps the SDK's long-standing behaviour for existing callers.
+        private static readonly HttpClient defaultHttpClient = CreateHttpClient(null);
+
+        // HttpClient.Timeout is fixed once an instance has sent its first request, so a caller-supplied
+        // timeout needs a client of its own. Giving every OnboardingServiceClient its own client would
+        // exhaust sockets, so clients are pooled by the one thing that distinguishes them and shared by
+        // every instance asking for the same deadline.
+        private static readonly ConcurrentDictionary<TimeSpan, HttpClient> httpClients =
+            new ConcurrentDictionary<TimeSpan, HttpClient>();
+
+        private readonly HttpClient httpClient;
         private readonly string cachekey = "token";
         private readonly string dataProviderId;
         private readonly string dataProviderSecret;
         private readonly IMemoryCache cache;
+        private bool disposed;
 
+        /// <summary>
+        /// Creates a client whose requests use HttpClient's own default timeout of 100 seconds.
+        /// </summary>
+        /// <remarks>
+        /// That deadline covers a whole request, and because the retry handler sits inside the pipeline it is
+        /// shared with every retry the client makes. A request that outlasts it fails with a bare "A task was
+        /// canceled." from which the originating status code cannot be recovered. Uploading large media, or
+        /// uploading concurrently from .NET Framework where ServicePointManager allows only two connections
+        /// per host, can outlast 100 seconds - prefer the overload taking a timeout for that kind of work.
+        /// </remarks>
         public OnboardingServiceClient(string dataProviderId, string dataProviderSecret)
+            : this(dataProviderId, dataProviderSecret, defaultHttpClient)
+        {
+        }
+
+        /// <summary>
+        /// Creates a client whose requests use <paramref name="requestTimeout"/> rather than HttpClient's
+        /// default. The deadline covers one whole request including any retries the client makes internally,
+        /// so leave room for those when choosing a value. Pass <see cref="Timeout.InfiniteTimeSpan"/> to rely
+        /// on cancellation tokens alone.
+        /// </summary>
+        /// <exception cref="ArgumentOutOfRangeException">
+        /// <paramref name="requestTimeout"/> is zero or negative and is not <see cref="Timeout.InfiniteTimeSpan"/>.
+        /// </exception>
+        public OnboardingServiceClient(string dataProviderId, string dataProviderSecret, TimeSpan requestTimeout)
+            : this(dataProviderId, dataProviderSecret, ClientFor(requestTimeout))
+        {
+        }
+
+        private OnboardingServiceClient(string dataProviderId, string dataProviderSecret, HttpClient httpClient)
         {
             this.dataProviderId = dataProviderId;
             this.dataProviderSecret = dataProviderSecret;
+            this.httpClient = httpClient;
             cache = new MemoryCache(new MemoryCacheOptions());
+        }
+
+        private static HttpClient ClientFor(TimeSpan requestTimeout)
+        {
+            ValidateTimeout(requestTimeout, nameof(requestTimeout));
+
+            return httpClients.GetOrAdd(requestTimeout, timeout => CreateHttpClient(timeout));
+        }
+
+        private static void ValidateTimeout(TimeSpan timeout, string parameterName)
+        {
+            if (timeout <= TimeSpan.Zero && timeout != Timeout.InfiniteTimeSpan)
+            {
+                throw new ArgumentOutOfRangeException(parameterName, timeout,
+                    "Timeout must be positive, or Timeout.InfiniteTimeSpan for no timeout.");
+            }
+        }
+
+        // A per-call deadline has to be the only deadline in play, so those requests go out on a client
+        // carrying no timeout of its own. Otherwise the client's own timeout - 100 seconds for a client
+        // built without one - would cut the upload short well before the caller's deadline did.
+        private static HttpClient UntimedClient => ClientFor(Timeout.InfiniteTimeSpan);
+
+        private static HttpClient CreateHttpClient(TimeSpan? requestTimeout)
+        {
+            var client = new HttpClient(new HttpRetryMessageHandler(new HttpClientHandler()))
+            {
+                BaseAddress = new Uri("https://ingest.occtoo.com")
+            };
+
+            if (requestTimeout.HasValue)
+            {
+                client.Timeout = requestTimeout.Value;
+            }
+
+            return client;
         }
 
         public StartImportResponse StartEntityImport(string dataSource, IReadOnlyList<DynamicEntity> entities, string token = null, Guid? correlationId = null, CancellationToken? cancellationToken = null)
@@ -309,14 +385,45 @@ namespace Occtoo.Onboarding.Sdk
             }
         }
 
-        public ApiResult<MediaFileDto> UploadFile(Stream content, UploadMetadata metadata, string token = null, CancellationToken? cancellationToken = null)
+        /// <inheritdoc cref="UploadFileAsync"/>
+        public ApiResult<MediaFileDto> UploadFile(Stream content, UploadMetadata metadata, string token = null, CancellationToken? cancellationToken = null, TimeSpan? uploadTimeout = null)
         {
-            return UploadFileAsync(content, metadata, token, cancellationToken).GetAwaiter().GetResult();
+            return UploadFileAsync(content, metadata, token, cancellationToken, uploadTimeout).GetAwaiter().GetResult();
         }
 
-        public async Task<ApiResult<MediaFileDto>> UploadFileAsync(Stream content, UploadMetadata metadata, string token = null, CancellationToken? cancellationToken = null)
+        /// <summary>
+        /// Uploads <paramref name="content"/> as a new media file.
+        /// </summary>
+        /// <param name="uploadTimeout">
+        /// Deadline for the upload as a whole - the creation request and every chunk after it. Left null,
+        /// the client's own timeout applies instead, which is HttpClient's 100 seconds unless the client was
+        /// built with one, and which counts per request rather than over the upload. A value here replaces
+        /// that: the requests go out on a client carrying no timeout of its own, so nothing cuts the upload
+        /// short before this deadline does. Pass <see cref="Timeout.InfiniteTimeSpan"/> for no deadline.
+        /// </param>
+        /// <exception cref="ArgumentOutOfRangeException">
+        /// <paramref name="uploadTimeout"/> is zero or negative and is not <see cref="Timeout.InfiniteTimeSpan"/>.
+        /// </exception>
+        public async Task<ApiResult<MediaFileDto>> UploadFileAsync(Stream content, UploadMetadata metadata, string token = null, CancellationToken? cancellationToken = null, TimeSpan? uploadTimeout = null)
         {
-            var fileResponse = await CreateFileAsync((int)metadata.Size, UploadMetadata.Serialize(metadata).Value, token, cancellationToken);
+            if (!uploadTimeout.HasValue)
+            {
+                return await UploadFileAsync(content, metadata, token, cancellationToken.GetValueOrDefault(), httpClient);
+            }
+
+            ValidateTimeout(uploadTimeout.Value, nameof(uploadTimeout));
+
+            using (var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken.GetValueOrDefault()))
+            {
+                // CancelAfter treats InfiniteTimeSpan as "never", which is exactly what that value should mean.
+                deadline.CancelAfter(uploadTimeout.Value);
+                return await UploadFileAsync(content, metadata, token, deadline.Token, UntimedClient);
+            }
+        }
+
+        private async Task<ApiResult<MediaFileDto>> UploadFileAsync(Stream content, UploadMetadata metadata, string token, CancellationToken cancellationToken, HttpClient client)
+        {
+            var fileResponse = await CreateFileAsync(client, (int)metadata.Size, UploadMetadata.Serialize(metadata).Value, token, cancellationToken);
             if (!fileResponse.IsSuccessStatusCode)
             {
                 return new ApiResult<MediaFileDto>
@@ -336,7 +443,7 @@ namespace Occtoo.Onboarding.Sdk
                 };
             }
 
-            var uploadResponse = await CreateObservableUpload(fileId.Value, content, 0L, token, cancellationToken).LastOrDefaultAsync();
+            var uploadResponse = await CreateObservableUpload(client, fileId.Value, content, 0L, token, cancellationToken).LastOrDefaultAsync();
             if (!uploadResponse.IsCompleted)
             {
                 return new ApiResult<MediaFileDto>
@@ -349,19 +456,21 @@ namespace Occtoo.Onboarding.Sdk
             return await GetFileAsync(fileId.Value, token, cancellationToken);
         }
 
-        public ApiResult<MediaFileDto> UploadFileIfNotExist(Stream content, UploadMetadata metadata, string token = null, CancellationToken? cancellationToken = null)
+        /// <inheritdoc cref="UploadFileAsync"/>
+        public ApiResult<MediaFileDto> UploadFileIfNotExist(Stream content, UploadMetadata metadata, string token = null, CancellationToken? cancellationToken = null, TimeSpan? uploadTimeout = null)
         {
-            return UploadFileIfNotExistAsync(content, metadata, token, cancellationToken).GetAwaiter().GetResult();
+            return UploadFileIfNotExistAsync(content, metadata, token, cancellationToken, uploadTimeout).GetAwaiter().GetResult();
         }
 
-        public async Task<ApiResult<MediaFileDto>> UploadFileIfNotExistAsync(Stream content, UploadMetadata metadata, string token = null, CancellationToken? cancellationToken = null)
+        /// <inheritdoc cref="UploadFileAsync"/>
+        public async Task<ApiResult<MediaFileDto>> UploadFileIfNotExistAsync(Stream content, UploadMetadata metadata, string token = null, CancellationToken? cancellationToken = null, TimeSpan? uploadTimeout = null)
         {
             if (string.IsNullOrWhiteSpace(metadata.UniqueIdentifier))
             {
                 return new ApiResult<MediaFileDto> { StatusCode = 400, Errors = new Error[1] { new Error("UniqueIdentifyer can not be null or empty") } };
             }
 
-            var uploadResponse = await UploadFileAsync(content, metadata, token, cancellationToken);
+            var uploadResponse = await UploadFileAsync(content, metadata, token, cancellationToken, uploadTimeout);
             if (uploadResponse.StatusCode == 409) //File already exist
             {
                 var fileRequest = await GetFileFromUniqueIdAsync(metadata.UniqueIdentifier, token, cancellationToken);
@@ -393,7 +502,7 @@ namespace Occtoo.Onboarding.Sdk
             return apiResult;
         }
 
-        private static async Task<StartImportResponse> EntityImportAsync(string dataSource, IEnumerable<DynamicEntity> validEntities, string token, CancellationToken cancellationToken, Guid? correlationId = null)
+        private async Task<StartImportResponse> EntityImportAsync(string dataSource, IEnumerable<DynamicEntity> validEntities, string token, CancellationToken cancellationToken, Guid? correlationId = null)
         {
             string requestUri = $"import/{dataSource}";
             if (correlationId.HasValue && correlationId != default(Guid))
@@ -529,8 +638,9 @@ namespace Occtoo.Onboarding.Sdk
         /// as header values to avoid header smuggling.
         /// </param>
         /// <param name="cancellationToken">Own cancellation token can be provided</param>
+        /// <param name="client">The client to send on, which decides whether a client-level timeout applies</param>
         /// <returns></returns>
-        private async Task<HttpResponseMessage> CreateFileAsync(int contentLength, string metadata, string token = null, CancellationToken? cancellationToken = null)
+        private async Task<HttpResponseMessage> CreateFileAsync(HttpClient client, int contentLength, string metadata, string token = null, CancellationToken? cancellationToken = null)
         {
             CancellationToken valueOrDefaultCancelToken = cancellationToken.GetValueOrDefault();
             if (string.IsNullOrEmpty(token))
@@ -549,7 +659,7 @@ namespace Occtoo.Onboarding.Sdk
                     {"Upload-Offset", "0"}
                 }
             };
-            return await httpClient.SendAsync(message, valueOrDefaultCancelToken);
+            return await client.SendAsync(message, valueOrDefaultCancelToken);
         }
 
         /// <summary>
@@ -561,8 +671,9 @@ namespace Occtoo.Onboarding.Sdk
         /// <param name="currentOffset">Current offset</param>
         /// <param name="memoryStream">The stream to patch with</param>
         /// <param name="cancellationToken">Own cancellation token can be provided</param>
+        /// <param name="client">The client to send on, which decides whether a client-level timeout applies</param>
         /// <returns></returns>
-        private async Task<HttpResponseMessage> PatchFileAsync(string fileId, int bufferLength, long currentOffset, MemoryStream memoryStream, string token = null, CancellationToken? cancellationToken = null)
+        private async Task<HttpResponseMessage> PatchFileAsync(HttpClient client, string fileId, int bufferLength, long currentOffset, MemoryStream memoryStream, string token = null, CancellationToken? cancellationToken = null)
         {
             CancellationToken valueOrDefaultCancelToken = cancellationToken.GetValueOrDefault();
             if (string.IsNullOrEmpty(token))
@@ -583,10 +694,10 @@ namespace Occtoo.Onboarding.Sdk
                     Headers = { { "Content-Type", "application/offset+octet-stream" } }
                 }
             };
-            return await httpClient.SendAsync(message, valueOrDefaultCancelToken);
+            return await client.SendAsync(message, valueOrDefaultCancelToken);
         }
 
-        private IObservable<Progress> CreateObservableUpload(string fileId, Stream content, long offset, string token = null, CancellationToken? cancellationToken = null)
+        private IObservable<Progress> CreateObservableUpload(HttpClient client, string fileId, Stream content, long offset, string token = null, CancellationToken? cancellationToken = null)
         {
             CancellationToken valueOrDefaultCancelToken = cancellationToken.GetValueOrDefault();
             int chunkSize = 4194304; // 4mb
@@ -598,6 +709,7 @@ namespace Occtoo.Onboarding.Sdk
                     var buffer = new byte[Math.Min(chunkSize, content.Length - currentOffset)];
                     var bytesRead = await content.ReadAsync(buffer, 0, buffer.Length, valueOrDefaultCancelToken);
                     HttpResponseMessage patchResponse = await PatchFileAsync(
+                        client,
                         fileId,
                         buffer.Length,
                         currentOffset,
@@ -622,6 +734,21 @@ namespace Occtoo.Onboarding.Sdk
         }
         #endregion
 
-        public void Dispose() => httpClient?.Dispose();
+        // httpClient comes from a pool shared by every instance in the process, so it is deliberately not
+        // disposed here. Disposing it would tear down the connection pool for every other instance handed
+        // the same client, and on .NET Framework HttpClient.Dispose also cancels every request still in
+        // flight - which those callers would see as an unexplained "A task was canceled." on work that had
+        // nothing to do with the instance being disposed. The token cache is the only resource an instance
+        // actually owns.
+        public void Dispose()
+        {
+            if (disposed)
+            {
+                return;
+            }
+
+            disposed = true;
+            cache?.Dispose();
+        }
     }
 }

@@ -41,7 +41,59 @@ static async Task Main(string[] args)
 }
 ```
 
+## Request timeout
+Every call has a deadline covering the whole request, retries included. By default that is whatever
+[`HttpClient`](https://learn.microsoft.com/en-us/dotnet/api/system.net.http.httpclient.timeout) uses -
+100 seconds - and the SDK does not override it.
+
+That is not much for a large media upload, so set your own:
+
+```cs
+var onboardingServliceClient = new OnboardingServiceClient(
+    dataProviderId,
+    dataProviderSecret,
+    TimeSpan.FromMinutes(30));
+```
+
+Clients asking for the same timeout share one underlying `HttpClient`, so creating several is cheap.
+Pass `Timeout.InfiniteTimeSpan` to drop the deadline altogether and control it through the
+`cancellationToken` parameter instead.
+
+A request that outlasts its deadline fails with `A task was canceled.`, and the status code that caused
+it cannot be recovered from that - so if you see it, suspect the timeout first.
+
+### Just the uploads
+Media uploads are usually the only calls that need longer, so they take a deadline of their own rather
+than forcing you to widen it for every call the client makes:
+
+```cs
+await onboardingServliceClient.UploadFileAsync(
+    content,
+    metadata,
+    uploadTimeout: TimeSpan.FromMinutes(10));
+```
+
+This one covers the upload as a whole - the creation request and every 4 MB chunk after it - rather than
+each request separately, and it replaces the client timeout for the duration rather than layering under
+it. `UploadFile`, `UploadFileIfNotExist` and `UploadFileIfNotExistAsync` take it too.
+
+> **Uploading from .NET Framework?** `ServicePointManager` caps outbound connections at two per host by
+> default, and time spent waiting for a free connection counts against the deadline. Raise
+> `ServicePointManager.DefaultConnectionLimit` if you upload files concurrently.
+
 [Code repository on github](https://github.com/Occtoo/Occtoo.Onboarding.Sdk)
+
+## Release Notes 3.1.0
+Fixes uploads failing with "A task was canceled.":
+* The request timeout can now be set per client through a new constructor overload. Callers that do not
+  set one keep HttpClient's default of 100 seconds, unchanged.
+* Media uploads additionally take an `uploadTimeout` covering the whole upload, so a slow file does not
+  mean widening the deadline for every other call.
+* Retries are limited to transient failures - connection errors, 5xx, 408 and 429 - instead of every
+  non-success status, so a 400 or a 409 comes back on the first attempt with its status intact.
+* Each retry sends its own copy of the request. A retry previously reused a request whose content stream
+  the first attempt had already consumed, which resent an empty body.
+* Dispose no longer disposes the HttpClient shared by every client in the process.
 
 ## Release Notes 2.0.2
 Bugfix for GetFileFromUniqueIdAsync to return 404 instead of 202 when no file found.
