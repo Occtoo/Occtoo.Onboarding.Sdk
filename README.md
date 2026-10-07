@@ -1,3 +1,8 @@
+> **Archived:** This repository is no longer actively maintained.
+> Please use [REPLACEMENT_REPO](https://github.com/Occtoo/dotnet-sdk instead.
+> The code remains available for reference.
+
+
 # Introduction 
 Wrapped httpclient used to create a [Nuget package](https://www.nuget.org/packages/Occtoo.Onboarding.Sdk) for calling onboarding.
 
