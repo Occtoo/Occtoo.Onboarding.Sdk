@@ -1,5 +1,5 @@
 > **Archived:** This repository is no longer actively maintained.
-> Please use [REPLACEMENT_REPO](https://github.com/Occtoo/dotnet-sdk) instead.
+> Please use [Occtoo SDK](https://github.com/Occtoo/dotnet-sdk) instead.
 > The code remains available for reference.
 
 
